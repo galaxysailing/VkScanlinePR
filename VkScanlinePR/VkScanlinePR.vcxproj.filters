@@ -10,10 +10,152 @@
     <Filter Include="workdir\shaders">
       <UniqueIdentifier>{1d5ccbd8-d7fd-4bee-b52e-3ee6f69c8302}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\test">
+      <UniqueIdentifier>{c1aa21de-b4d8-4420-ab63-09c97a06e6c3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\core">
+      <UniqueIdentifier>{67a87829-ce60-4a37-b1b4-968089ac04dc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\app">
+      <UniqueIdentifier>{6661314f-dcce-4158-9afe-b752a3c3d789}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\core\common">
+      <UniqueIdentifier>{28c46079-34bd-420a-b9ba-15e2e3ce2bd0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\core\vk">
+      <UniqueIdentifier>{6609f67e-4f4a-40cf-a5b5-1916670b61f2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\core\vg">
+      <UniqueIdentifier>{8c669ada-4ec6-47c1-a261-f18f981ec50e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="workdir\input">
+      <UniqueIdentifier>{e546988c-75bd-4cae-b27d-164e7289d455}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="workdir\input\rvg">
+      <UniqueIdentifier>{2c5b641c-c44e-4a5c-894e-8b6b66d68e3c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\app\vg_app.cpp">
+      <Filter>src\app</Filter>
+    </ClCompile>
     <ClCompile Include="src\main.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\core\rasterizer_scanline.cpp">
+      <Filter>src\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\vg\rvg.cpp">
+      <Filter>src\core\vg</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\vg\vg_container.cpp">
+      <Filter>src\core\vg</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\vk\vk_buffer.cpp">
+      <Filter>src\core\vk</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\vk\vk_debug.cpp">
+      <Filter>src\core\vk</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\vk\vk_device.cpp">
+      <Filter>src\core\vk</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\vk\vk_swapchain.cpp">
+      <Filter>src\core\vk</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\vk\vk_util.cpp">
+      <Filter>src\core\vk</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\vk\vk_vg_rasterizer.cpp">
+      <Filter>src\core\vk</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\core\rasterizer.h">
+      <Filter>src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\app\vg_app.h">
+      <Filter>src\app</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\common\camera.hpp">
+      <Filter>src\core\common</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\vg\rvg.h">
+      <Filter>src\core\vg</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\vg\vg_container.h">
+      <Filter>src\core\vg</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\vk\vk_buffer.h">
+      <Filter>src\core\vk</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\vk\vk_debug.h">
+      <Filter>src\core\vk</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\vk\vk_device.h">
+      <Filter>src\core\vk</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\vk\vk_initializer.h">
+      <Filter>src\core\vk</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\vk\vk_swapchain.h">
+      <Filter>src\core\vk</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\vk\vk_util.h">
+      <Filter>src\core\vk</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\vk\vk_vg_rasterizer.h">
+      <Filter>src\core\vk</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\workdir\input\rvg\test.rvg">
+      <Filter>workdir\input\rvg</Filter>
+    </None>
+    <None Include="..\workdir\input\rvg\boston.rvg">
+      <Filter>workdir\input\rvg</Filter>
+    </None>
+    <None Include="..\workdir\input\rvg\car.rvg">
+      <Filter>workdir\input\rvg</Filter>
+    </None>
+    <None Include="..\workdir\input\rvg\chord.rvg">
+      <Filter>workdir\input\rvg</Filter>
+    </None>
+    <None Include="..\workdir\input\rvg\chord-black.rvg">
+      <Filter>workdir\input\rvg</Filter>
+    </None>
+    <None Include="..\workdir\input\rvg\contour.rvg">
+      <Filter>workdir\input\rvg</Filter>
+    </None>
+    <None Include="..\workdir\input\rvg\drops.rvg">
+      <Filter>workdir\input\rvg</Filter>
+    </None>
+    <None Include="..\workdir\input\rvg\embrace.rvg">
+      <Filter>workdir\input\rvg</Filter>
+    </None>
+    <None Include="..\workdir\input\rvg\hawaii.rvg">
+      <Filter>workdir\input\rvg</Filter>
+    </None>
+    <None Include="..\workdir\input\rvg\paper-1.rvg">
+      <Filter>workdir\input\rvg</Filter>
+    </None>
+    <None Include="..\workdir\input\rvg\paper-2.rvg">
+      <Filter>workdir\input\rvg</Filter>
+    </None>
+    <None Include="..\workdir\input\rvg\paris-30k.rvg">
+      <Filter>workdir\input\rvg</Filter>
+    </None>
+    <None Include="..\workdir\input\rvg\paris-50k.rvg">
+      <Filter>workdir\input\rvg</Filter>
+    </None>
+    <None Include="..\workdir\input\rvg\paris-70k.rvg">
+      <Filter>workdir\input\rvg</Filter>
+    </None>
+    <None Include="..\workdir\input\rvg\reschart.rvg">
+      <Filter>workdir\input\rvg</Filter>
+    </None>
+    <None Include="..\workdir\input\rvg\tiger.rvg">
+      <Filter>workdir\input\rvg</Filter>
+    </None>
   </ItemGroup>
 </Project>
