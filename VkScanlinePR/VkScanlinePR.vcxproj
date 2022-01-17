@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -124,7 +124,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>glfw3.lib;vulkan-1.lib;shaderc_shared.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -144,7 +144,52 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\app\vg_app.cpp" />
+    <ClCompile Include="src\core\scanline\scanline_rasterizer.cpp" />
+    <ClCompile Include="src\core\vg\rvg.cpp" />
+    <ClCompile Include="src\core\vg\vg_container.cpp" />
+    <ClCompile Include="src\core\vk\vk_buffer.cpp" />
+    <ClCompile Include="src\core\vk\vk_debug.cpp" />
+    <ClCompile Include="src\core\vk\vk_device.cpp" />
+    <ClCompile Include="src\core\vk\vk_swapchain.cpp" />
+    <ClCompile Include="src\core\vk\vk_util.cpp" />
+    <ClCompile Include="src\core\vk\vk_vg_rasterizer.cpp" />
     <ClCompile Include="src\main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\app\vg_app.h" />
+    <ClInclude Include="src\core\common\camera.hpp" />
+    <ClInclude Include="src\core\rasterizer.h" />
+    <ClInclude Include="src\core\scanline\scanline_rasterizer.h" />
+    <ClInclude Include="src\core\vg\rvg.h" />
+    <ClInclude Include="src\core\vg\vg_container.h" />
+    <ClInclude Include="src\core\vk\vk_initializer.h" />
+    <ClInclude Include="src\core\vk\vk_buffer.h" />
+    <ClInclude Include="src\core\vk\vk_debug.h" />
+    <ClInclude Include="src\core\vk\vk_device.h" />
+    <ClInclude Include="src\core\vk\vk_swapchain.h" />
+    <ClInclude Include="src\core\vk\vk_util.h" />
+    <ClInclude Include="src\core\vk\vk_vg_rasterizer.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\workdir\input\rvg\boston.rvg" />
+    <None Include="..\workdir\input\rvg\car.rvg" />
+    <None Include="..\workdir\input\rvg\chord-black.rvg" />
+    <None Include="..\workdir\input\rvg\chord.rvg" />
+    <None Include="..\workdir\input\rvg\contour.rvg" />
+    <None Include="..\workdir\input\rvg\drops.rvg" />
+    <None Include="..\workdir\input\rvg\embrace.rvg" />
+    <None Include="..\workdir\input\rvg\hawaii.rvg" />
+    <None Include="..\workdir\input\rvg\paper-1.rvg" />
+    <None Include="..\workdir\input\rvg\paper-2.rvg" />
+    <None Include="..\workdir\input\rvg\paris-30k.rvg" />
+    <None Include="..\workdir\input\rvg\paris-50k.rvg" />
+    <None Include="..\workdir\input\rvg\paris-70k.rvg" />
+    <None Include="..\workdir\input\rvg\reschart.rvg" />
+    <None Include="..\workdir\input\rvg\test.rvg" />
+    <None Include="..\workdir\input\rvg\tiger.rvg" />
+    <None Include="..\workdir\shaders\scanlinepr.frag" />
+    <None Include="..\workdir\shaders\scanlinepr.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
