@@ -153,7 +153,7 @@
     <ClCompile Include="src\core\vk\vk_device.cpp" />
     <ClCompile Include="src\core\vk\vk_swapchain.cpp" />
     <ClCompile Include="src\core\vk\vk_util.cpp" />
-    <ClCompile Include="src\core\vk\vk_vg_rasterizer.cpp" />
+    <ClCompile Include="src\core\vulkan\vk_vg_rasterizer.cpp" />
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -161,6 +161,7 @@
     <ClInclude Include="src\core\common\camera.hpp" />
     <ClInclude Include="src\core\rasterizer.h" />
     <ClInclude Include="src\core\scanline\scanline_rasterizer.h" />
+    <ClInclude Include="src\core\scanline\vk_vg_data.h" />
     <ClInclude Include="src\core\vg\rvg.h" />
     <ClInclude Include="src\core\vg\vg_container.h" />
     <ClInclude Include="src\core\vk\vk_initializer.h" />
@@ -169,7 +170,8 @@
     <ClInclude Include="src\core\vk\vk_device.h" />
     <ClInclude Include="src\core\vk\vk_swapchain.h" />
     <ClInclude Include="src\core\vk\vk_util.h" />
-    <ClInclude Include="src\core\vk\vk_vg_rasterizer.h" />
+    <ClInclude Include="src\core\vulkan\vk_vg_rasterizer.h" />
+    <ClInclude Include="src\core\vulkan\vulkan_buffer.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\workdir\input\rvg\boston.rvg" />

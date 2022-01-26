@@ -1,0 +1,82 @@
+#version 450
+
+layout(std430, binding = 0) buffer PosIn{
+    vec2 pos_in[];
+};
+
+layout(std430, binding = 1) buffer PosPathIdx{
+    uint pos_path_idx[];
+};
+
+// ---------- output --------------
+layout(std430, binding = 2) buffer TransformedPos{
+    vec2 transformed_pos[];
+};
+
+layout(std430, binding = 3) buffer PathVisible{
+    // 64 bit: path_visible
+    // size: n_path * 2
+    int path_visible[];
+};
+// --------------------------------
+
+layout(std140, binding = 4)uniform UBO{
+    uint n_points;
+    float w, h;
+    vec4 m0, m1, m2, m3;
+}ubo;
+
+void main() {
+    uvec3 id = gl_GlobalInvocationID;
+
+    uint poi = id.y * 256 + id.x;
+    if (poi > ubo.n_points){ 
+		return;
+    }
+
+    vec2 pos = pos_in[poi];
+    
+    vec4 ip = vec4(pos.x, pos.y, 0, 1);
+    vec4 op;
+    op.x = dot(ip, ubo.m0);
+    op.y = dot(ip, ubo.m1);
+    op.z = dot(ip, ubo.m2);
+    op.w = dot(ip, ubo.m3);
+
+    float w_inv = 1.0f / op.w;
+
+    op.x *= w_inv;
+    op.y *= w_inv;
+    op.z *= w_inv;
+
+    // path visible flag:
+	//
+	//         y > height
+	//
+	//         5 | 6 | 7
+	// x < 0   3 | x | 4  x > width
+	//         0 | 1 | 2 
+	//
+	//           y < 0
+
+    int x_flag = op.x < 0 ? 0x00 : (op.x <= ubo.w ? 0x01 : 0x02);
+    int y_flag = op.y < 0 ? 0x00 : (op.y <= ubo.h ? 0x01 : 0x02);
+    
+    uint pi = pos_path_idx[poi];
+    switch((y_flag << 4) | (x_flag)){
+        case 0x00: path_visible[pi] = 0x10000000; break;
+        case 0x01: path_visible[pi] = 0x01000000; break;
+        case 0x02: path_visible[pi] = 0x00100000; break;
+        case 0x10: path_visible[pi] = 0x00010000; break;
+        case 0x11: path_visible[pi] = 0x10000001; break;
+        case 0x12: path_visible[pi] = 0x00001000; break;
+        case 0x20: path_visible[pi] = 0x00000100; break;
+        case 0x21: path_visible[pi] = 0x00000010; break;
+        case 0x22: path_visible[pi] = 0x00000001; break;
+        break;
+    }
+    
+    // transformed pos
+    transformed_pos[poi].x = op.x;
+    transformed_pos[poi].y = op.y;
+}

@@ -154,7 +154,7 @@ void RVG::parse_paths(std::ifstream& fin)
 				break;
 			}
 
-			auto& curveInd = vg.curveData.curveIndex;
+			//auto& curveInd = vg.curveData.curveIndex;
 
 			switch (cmd) {
 			case 'M':

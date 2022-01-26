@@ -7,11 +7,11 @@
 namespace Galaxysailing {
 
 enum class CurveType {
-	NONE = 0,
-	LINE = 1,
-	QUADRIC = 3,
-	CUBIC = 4,
-	ARC = 7
+	NONE = 0x00,
+	LINE = 0x01,
+	QUADRIC = 0x03,
+	CUBIC = 0x04,
+	ARC = 0x13
 };
 enum class FillRule {
 	NONE = 0,

@@ -1,18 +1,19 @@
 #pragma once
-#ifndef GALAXYSAILING_VK_VG_RASTERIZER_H_
-#define GALAXYSAILING_VK_VG_RASTERIZER_H_
+#ifndef GALAXYSAILING_VULKAN_VG_RASTERIZER_H_
+#define GALAXYSAILING_VULKAN_VG_RASTERIZER_H_
 
 #include <vulkan/vulkan.h>
 #include <vector>
 #include <optional>
 #include <string>
 
-#include "vk_device.h"
-#include "vk_swapchain.h"
-#include "vk_util.h"
-#include "vk_debug.h"
+#include "../vk/vk_device.h"
+#include "../vk/vk_swapchain.h"
+#include "../vk/vk_util.h"
+#include "../vk/vk_debug.h"
 
 namespace Galaxysailing {
+
 class VulkanVGRasterizerBase{
 // ----------------------------- vulkan function -----------------------------
 protected:

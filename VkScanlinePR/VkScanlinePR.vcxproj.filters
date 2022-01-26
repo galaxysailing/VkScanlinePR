@@ -108,6 +108,7 @@
       <Filter>src\core\vk</Filter>
     </ClInclude>
     <ClInclude Include="src\core\scanline\scanline_rasterizer.h" />
+    <ClInclude Include="src\core\scanline\vk_vg_data.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\workdir\input\rvg\test.rvg">
