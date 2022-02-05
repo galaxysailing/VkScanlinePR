@@ -1,0 +1,41 @@
+#version 450
+
+layout(std140, binding = 0)uniform UBO{
+    uint n_curves;
+    int w, h;
+}ubo;
+
+// layout(std430, binding = 1) buffer CurveType{
+//     uint curve_type[];
+// };
+
+// layout(std430, binding = 2) buffer CurvePosMap{
+//     uint curve_pos_map[];
+// };
+
+// layout(std430, binding = 3) buffer TransformedPos{
+//     vec2 transformed_pos[];
+// };
+
+// layout(std430, binding = 4) buffer CurvePathIdx{
+//     uint curve_path_idx[];
+// };
+
+// layout(std430, binding = 5) buffer PathVisible{
+//     uint path_visible[];
+// };
+
+
+void main() {
+    uvec3 id = gl_GlobalInvocationID;
+
+    // curve id
+    uint ci = id.y * 256 + id.x;
+    if (ci > ubo.n_curves){ 
+		return;
+    }
+
+
+
+
+}

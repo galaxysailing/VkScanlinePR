@@ -66,9 +66,7 @@
     <ClCompile Include="src\core\vk\vk_util.cpp">
       <Filter>src\core\vk</Filter>
     </ClCompile>
-    <ClCompile Include="src\core\vk\vk_vg_rasterizer.cpp">
-      <Filter>src\core\vk</Filter>
-    </ClCompile>
+    <ClCompile Include="src\core\vulkan\vk_vg_rasterizer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\rasterizer.h">
@@ -104,11 +102,12 @@
     <ClInclude Include="src\core\vk\vk_util.h">
       <Filter>src\core\vk</Filter>
     </ClInclude>
-    <ClInclude Include="src\core\vk\vk_vg_rasterizer.h">
-      <Filter>src\core\vk</Filter>
-    </ClInclude>
     <ClInclude Include="src\core\scanline\scanline_rasterizer.h" />
     <ClInclude Include="src\core\scanline\vk_vg_data.h" />
+    <ClInclude Include="src\core\vulkan\vk_vg_rasterizer.h" />
+    <ClInclude Include="src\core\vulkan\vulkan_buffer.h" />
+    <ClInclude Include="src\core\common\compute_kernal.h" />
+    <ClInclude Include="src\core\scanline\compute_ubo.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\workdir\input\rvg\test.rvg">

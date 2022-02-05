@@ -28,8 +28,12 @@ namespace vulkan {
 			_queue = queue;
 		}
 
-		// new bytes
-		void resizeWithoutCopy(uint32_t new_size) {
+		void resizeWithoutCopy(uint32_t len) {
+			VkDeviceSize new_size = static_cast<VkDeviceSize>(sizeof(T) * len);
+			if (new_size == _size) {
+				return;
+			}
+
 			if (_capacity < new_size) {
 				destroy();
 				_capacity = tableSizeFor(new_size);
@@ -37,11 +41,12 @@ namespace vulkan {
 					, _memory_property_flags
 					, _capacity, &_buffer, &_memory));
 			}
-			_size = static_cast<VkDeviceSize>(new_size);
+			_size = new_size;
 			setupDescriptor();
 		}
 
-		void set(T& data, uint32_t buf_size) {
+		void set(T& data, uint32_t len) {
+			VkDeviceSize buf_size = static_cast<VkDeviceSize>(sizeof(T) * len);
 			if (_buffer && _memory) {
 				if (_capacity < buf_size) {
 					throw std::runtime_error("Vulkan Buffer");

@@ -17,6 +17,14 @@
 
 #define GPU_VULKAN_BUFFER(T) NEW_VULKAN_BUFFER(T, _vulkanDevice, usage_flags, memory_property_flags, queue)
 
+#define COMPUTE_KERNAL(wds, shader) std::make_shared<ComputeKernal>(_device, _pipelineCache \
+, wds                                                                                       \
+, _compute.cmd_pool                                                                         \
+, true                                                                                      \
+, loadShader(shader, VK_SHADER_STAGE_COMPUTE_BIT)                                           \
+, vkCmdPushDescriptorSetKHR)                                                               
+inline int divup(int a, int b) { return (a + (b - 1)) / b; }
+
 namespace Galaxysailing {
 
 using _Base = Galaxysailing::VulkanVGRasterizerBase;
@@ -27,6 +35,9 @@ void ScanlineVGRasterizer::initialize(void* window, uint32_t w, uint32_t h)
     // about window
     _window = (GLFWwindow*)window;
     _width = w, _height = h;
+
+    _enabledInstanceExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+    _enabledDeviceExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
 
     _Base::initVulkan();
 
@@ -168,6 +179,17 @@ void ScanlineVGRasterizer::prepare()
 {
     _Base::prepare();
 
+    // Get device push descriptor properties (to display them)
+    PFN_vkGetPhysicalDeviceProperties2KHR vkGetPhysicalDeviceProperties2KHR = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties2KHR>(vkGetInstanceProcAddr(_instance, "vkGetPhysicalDeviceProperties2KHR"));
+    if (!vkGetPhysicalDeviceProperties2KHR) {
+        throw std::runtime_error("Could not get a valid function pointer for vkGetPhysicalDeviceProperties2KHR");
+    }
+    VkPhysicalDeviceProperties2KHR deviceProps2{};
+    pushDescriptorProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_PROPERTIES_KHR;
+    deviceProps2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2_KHR;
+    deviceProps2.pNext = &pushDescriptorProps;
+    vkGetPhysicalDeviceProperties2KHR(_physicalDevice, &deviceProps2);
+
     prepareGraphics();
 
     prepareComputeBuffers();
@@ -223,16 +245,18 @@ void ScanlineVGRasterizer::drawFrame()
     VkPipelineStageFlags computeWaitDstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
     if (!firstDraw) {
         computeSubmitInfo.waitSemaphoreCount = 1;
-        computeSubmitInfo.pWaitSemaphores = &_compute.semaphores.ready;
+        //computeSubmitInfo.pWaitSemaphores = &_compute.semaphores.ready;
+        computeSubmitInfo.pWaitSemaphores = &k_transform_pos->semaphores.ready;
         computeSubmitInfo.pWaitDstStageMask = &computeWaitDstStageMask;
     }
     else {
         firstDraw = false;
     }
     computeSubmitInfo.signalSemaphoreCount = 1;
-    computeSubmitInfo.pSignalSemaphores = &_compute.semaphores.complete;
+    //computeSubmitInfo.pSignalSemaphores = &_compute.semaphores.complete;
+    computeSubmitInfo.pSignalSemaphores = &k_transform_pos->semaphores.complete;
     computeSubmitInfo.commandBufferCount = 1;
-    computeSubmitInfo.pCommandBuffers = &_compute.commandBuffer;
+    computeSubmitInfo.pCommandBuffers = &k_transform_pos->cmd_buffer;
 
     VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &computeSubmitInfo, VK_NULL_HANDLE));
 
@@ -243,10 +267,10 @@ void ScanlineVGRasterizer::drawFrame()
     };
 
     std::array<VkSemaphore,2> waitSemaphores = {
-        _semaphores.presentComplete, _compute.semaphores.complete
+        _semaphores.presentComplete, k_transform_pos->semaphores.complete
     };
     std::array<VkSemaphore,2> signalSemaphores = {
-        _semaphores.renderComplete, _compute.semaphores.ready
+        _semaphores.renderComplete, k_transform_pos->semaphores.ready
     };
     submitInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
     submitInfo.pWaitSemaphores = waitSemaphores.data();
@@ -261,13 +285,14 @@ void ScanlineVGRasterizer::drawFrame()
 
     _Base::submitFrame();
 
-    //// for debug
-    //int32_t* ptr = _compute.storage_buffers.path_visible->cptr();
-    //printf("-------------------- begin --------------------\n");
-    //for (int i = 0; i < _compute.curve_input.n_points; ++i) {
-    //    printf("0x%x\n", *ptr);
-    //}
-    //printf("-------------------- end --------------------\n");
+    // for debug
+    vec2* ptr = _compute.storage_buffers.transformed_pos->cptr();
+    printf("-------------------- begin --------------------\n");
+    for (int i = 0; i < _compute.curve_input.n_points; ++i, ++ptr) {
+        //printf("%d\n", *ptr);
+        printf("%f, %f\n", ptr->x, ptr->y);
+    }
+    printf("-------------------- end --------------------\n");
 }
 
 void ScanlineVGRasterizer::prepareTexelBuffers()
@@ -290,8 +315,8 @@ void ScanlineVGRasterizer::setupDescriptorPool()
         // test
         vk::initializer::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1),
         ///
-        vk::initializer::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4),
-        vk::initializer::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1)
+        vk::initializer::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 5),
+        vk::initializer::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2)
     };
 
     VkDescriptorPoolCreateInfo descriptorPoolInfo =
@@ -399,117 +424,153 @@ void ScanlineVGRasterizer::preparePipelines()
 
 void ScanlineVGRasterizer::prepareCompute()
 {
-// --------------------------------------------------------- compute function ------------------------------------------------------------
-    // Create compute pipeline
-    std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
-        vk::initializer::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 0),
-        vk::initializer::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 1),
-        vk::initializer::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 2),
-        vk::initializer::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 3),
-        vk::initializer::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 4),
-    };
-
-    VkDescriptorSetLayoutCreateInfo descriptorLayout =
-        vk::initializer::descriptorSetLayoutCreateInfo(setLayoutBindings);
-
-    VK_CHECK_RESULT(vkCreateDescriptorSetLayout(_device, &descriptorLayout, nullptr, &_compute.descriptorSetLayout));
-
-    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo =
-        vk::initializer::pipelineLayoutCreateInfo(&_compute.descriptorSetLayout, 1);
-
-    VK_CHECK_RESULT(vkCreatePipelineLayout(_device, &pipelineLayoutCreateInfo, nullptr, &_compute.pipelineLayout));
-
-    VkDescriptorSetAllocateInfo allocInfo =
-        vk::initializer::descriptorSetAllocateInfo(_descriptorPool, &_compute.descriptorSetLayout, 1);
-
-    VK_CHECK_RESULT(vkAllocateDescriptorSets(_device, &allocInfo, &_compute.descriptorSet));
-
-    auto& _c = _compute;
-    auto& _cin_curve = _c.curve_input;
-    auto& _csb = _c.storage_buffers;
-    auto& _cub = _c.uniform_buffers;
-    std::vector<VkWriteDescriptorSet> computeWriteDescriptorSets = {
-            vk::initializer::writeDescriptorSet(_compute.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0, &_cin_curve.position->descriptor.buf_info),
-            vk::initializer::writeDescriptorSet(_compute.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, &_cin_curve.position_path_idx->descriptor.buf_info),
-            vk::initializer::writeDescriptorSet(_compute.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2, &_csb.transformed_pos->descriptor.buf_info),
-            vk::initializer::writeDescriptorSet(_compute.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3, &_csb.path_visible->descriptor.buf_info),
-            vk::initializer::writeDescriptorSet(_compute.descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4, &_cub.transformPosUBO->descriptor.buf_info)
-    };
-    vkUpdateDescriptorSets(_device, static_cast<uint32_t>(computeWriteDescriptorSets.size()), computeWriteDescriptorSets.data(), 0, nullptr);
-
-    VkComputePipelineCreateInfo computePipelineCreateInfo = vk::initializer::computePipelineCreateInfo(_compute.pipelineLayout, 0);
-    computePipelineCreateInfo.stage = loadShader("shaders/compute/transformPos.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
-    VK_CHECK_RESULT(vkCreateComputePipelines(_device, _pipelineCache, 1, &computePipelineCreateInfo, nullptr, &_compute.pipeline));
-
-// ---------------------------------------------------------------------------------------------------------------------------------------
-
+//// --------------------------------------------------------- compute function ------------------------------------------------------------
+//    // Create compute pipeline
+//    std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
+//        vk::initializer::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 0),
+//        vk::initializer::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 1),
+//        vk::initializer::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 2),
+//        vk::initializer::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 3),
+//        vk::initializer::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 4),
+//    };
+//
+//    VkDescriptorSetLayoutCreateInfo descriptorLayout =
+//        vk::initializer::descriptorSetLayoutCreateInfo(setLayoutBindings);
+//    descriptorLayout.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+//
+//    VK_CHECK_RESULT(vkCreateDescriptorSetLayout(_device, &descriptorLayout, nullptr, &_compute.descriptorSetLayout));
+//
+//    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo =
+//        vk::initializer::pipelineLayoutCreateInfo(&_compute.descriptorSetLayout, 1);
+//
+//    VK_CHECK_RESULT(vkCreatePipelineLayout(_device, &pipelineLayoutCreateInfo, nullptr, &_compute.pipelineLayout));
+//
+//    //VkDescriptorSetAllocateInfo allocInfo =
+//    //    vk::initializer::descriptorSetAllocateInfo(_descriptorPool, &_compute.descriptorSetLayout, 1);
+//
+//    //VK_CHECK_RESULT(vkAllocateDescriptorSets(_device, &allocInfo, &_compute.descriptorSet));
+//
+//    //auto& _c = _compute;
+//    //auto& _cin_curve = _c.curve_input;
+//    //auto& _csb = _c.storage_buffers;
+//    //auto& _cub = _c.uniform_buffers;
+//    //std::vector<VkWriteDescriptorSet> computeWriteDescriptorSets = {
+//    //        vk::initializer::writeDescriptorSet(_compute.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0, &_cin_curve.position->descriptor.buf_info),
+//    //        vk::initializer::writeDescriptorSet(_compute.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, &_cin_curve.position_path_idx->descriptor.buf_info),
+//    //        vk::initializer::writeDescriptorSet(_compute.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2, &_csb.transformed_pos->descriptor.buf_info),
+//    //        vk::initializer::writeDescriptorSet(_compute.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3, &_csb.path_visible->descriptor.buf_info),
+//    //        vk::initializer::writeDescriptorSet(_compute.descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4, &_cub.transformPosUBO->descriptor.buf_info),
+//    //        vk::initializer::writeDescriptorSet(_compute.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 5, &_csb.test->descriptor.buf_info),
+//    //};
+//
+//    //vkUpdateDescriptorSets(_device, static_cast<uint32_t>(computeWriteDescriptorSets.size()), computeWriteDescriptorSets.data(), 0, nullptr);
+//
+//    VkComputePipelineCreateInfo computePipelineCreateInfo = vk::initializer::computePipelineCreateInfo(_compute.pipelineLayout, 0);
+//    computePipelineCreateInfo.stage = loadShader("shaders/compute/transformPos.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
+//    VK_CHECK_RESULT(vkCreateComputePipelines(_device, _pipelineCache, 1, &computePipelineCreateInfo, nullptr, &_compute.pipeline));
+//
+//// ---------------------------------------------------------------------------------------------------------------------------------------
+//
     // Separate command pool as queue family for compute may be different than graphics
     VkCommandPoolCreateInfo cmdPoolInfo = {};
     cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     cmdPoolInfo.queueFamilyIndex = _vulkanDevice->queueFamilyIndices.compute;
     cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    VK_CHECK_RESULT(vkCreateCommandPool(_device, &cmdPoolInfo, nullptr, &_compute.commandPool));
+    VK_CHECK_RESULT(vkCreateCommandPool(_device, &cmdPoolInfo, nullptr, &_compute.cmd_pool));
+//
+//    // Create a command buffer for compute operations
+//    VkCommandBufferAllocateInfo cmdBufAllocateInfo =
+//        vk::initializer::commandBufferAllocateInfo(_compute.commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
+//
+//    VK_CHECK_RESULT(vkAllocateCommandBuffers(_device, &cmdBufAllocateInfo, &_compute.commandBuffer));
+//
+//    // Semaphores for graphics / compute synchronization
+//    VkSemaphoreCreateInfo semaphoreCreateInfo = vk::initializer::semaphoreCreateInfo();
+//    VK_CHECK_RESULT(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &_compute.semaphores.ready));
+//    VK_CHECK_RESULT(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &_compute.semaphores.complete));
+//
+//    // Build a single command buffer containing the compute dispatch commands
+//    buildComputeCommandBuffer();
 
-    // Create a command buffer for compute operations
-    VkCommandBufferAllocateInfo cmdBufAllocateInfo =
-        vk::initializer::commandBufferAllocateInfo(_compute.commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
+    PFN_vkCmdPushDescriptorSetKHR vkCmdPushDescriptorSetKHR = (PFN_vkCmdPushDescriptorSetKHR)vkGetDeviceProcAddr(_device, "vkCmdPushDescriptorSetKHR");
+    if (!vkCmdPushDescriptorSetKHR) {
+        throw std::runtime_error("vkCmdPushDescriptorSetKHR not found");
+    }
 
-    VK_CHECK_RESULT(vkAllocateCommandBuffers(_device, &cmdBufAllocateInfo, &_compute.commandBuffer));
+    auto& _c = _compute;
+    auto& _cin_curve = _c.curve_input;
+    auto& _csb = _c.storage_buffers;
+    auto& _cub = _c.uniform_buffers;
 
-    // Semaphores for graphics / compute synchronization
-    VkSemaphoreCreateInfo semaphoreCreateInfo = vk::initializer::semaphoreCreateInfo();
-    VK_CHECK_RESULT(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &_compute.semaphores.ready));
-    VK_CHECK_RESULT(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &_compute.semaphores.complete));
+	std::vector<VkWriteDescriptorSet> wds_transform {
+        vk::initializer::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &_cub.k_trans_pos_ubo->descriptor.buf_info),
+		vk::initializer::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, &_cin_curve.position->descriptor.buf_info),
+        vk::initializer::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2, &_cin_curve.position_path_idx->descriptor.buf_info),
+        vk::initializer::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3, &_csb.transformed_pos->descriptor.buf_info),
+        vk::initializer::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4, &_csb.path_visible->descriptor.buf_info),
+	};
 
-    // Build a single command buffer containing the compute dispatch commands
-    buildComputeCommandBuffer();
+    k_transform_pos = COMPUTE_KERNAL(wds_transform, "shaders/compute/transformPos.comp.spv");
+
+    k_transform_pos->buildCmdBuffer(256, divup(_compute.curve_input.n_points, 256));
+
+    std::vector<VkWriteDescriptorSet> wds_make_int_0 {
+        vk::initializer::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &_cub.k_make_inte_ubo->descriptor.buf_info),
+        //vk::initializer::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0, &_cin_curve.position->descriptor.buf_info),
+        //vk::initializer::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, &_cin_curve.position_path_idx->descriptor.buf_info),
+        //vk::initializer::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2, &_csb.transformed_pos->descriptor.buf_info),
+        //vk::initializer::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3, &_csb.path_visible->descriptor.buf_info),
+    };
+
+    k_make_intersection_0 = COMPUTE_KERNAL(wds_make_int_0, "shaders/compute/makeIntersection0.comp.spv");
+
+    k_make_intersection_0->buildCmdBuffer(256, divup(_compute.curve_input.n_curves, 256));
+
+
 
 }
 
 void ScanlineVGRasterizer::buildComputeCommandBuffer()
 {
-    VkCommandBufferBeginInfo cmdBufInfo = vk::initializer::commandBufferBeginInfo();
-    cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+ //   VkCommandBufferBeginInfo cmdBufInfo = vk::initializer::commandBufferBeginInfo();
+ //   cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+	//auto& _c = _compute;
+	//auto& _cin_curve = _c.curve_input;
+	//auto& _csb = _c.storage_buffers;
+	//auto& _cub = _c.uniform_buffers;
+	//std::vector<VkWriteDescriptorSet> computeWriteDescriptorSets = {
+	//		vk::initializer::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0, &_cin_curve.position->descriptor.buf_info),
+	//		vk::initializer::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, &_cin_curve.position_path_idx->descriptor.buf_info),
+	//		vk::initializer::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2, &_csb.transformed_pos->descriptor.buf_info),
+	//		vk::initializer::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3, &_csb.path_visible->descriptor.buf_info),
+	//		vk::initializer::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4, &_cub.transformPosUBO->descriptor.buf_info)
+	//};
 
-    VK_CHECK_RESULT(vkBeginCommandBuffer(_compute.commandBuffer, &cmdBufInfo));
+ //   VK_CHECK_RESULT(vkBeginCommandBuffer(_compute.commandBuffer, &cmdBufInfo));
+ //   // Acquire the storage buffers from the graphics queue
+ //   //addGraphicsToComputeBarriers(_compute.commandBuffer);
 
-    // Acquire the storage buffers from the graphics queue
-    //addGraphicsToComputeBarriers(_compute.commandBuffer);
+ //   vkCmdBindPipeline(_compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.pipeline);
 
-    vkCmdBindPipeline(_compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.pipeline);
+ //   PFN_vkCmdPushDescriptorSetKHR vkCmdPushDescriptorSetKHR = (PFN_vkCmdPushDescriptorSetKHR)vkGetDeviceProcAddr(_device, "vkCmdPushDescriptorSetKHR");
+ //   if (!vkCmdPushDescriptorSetKHR) {
+ //       throw std::runtime_error("vkCmdPushDescriptorSetKHR not found");
+ //   }
+ //   vkCmdPushDescriptorSetKHR(_compute.commandBuffer
+ //       , VK_PIPELINE_BIND_POINT_COMPUTE
+ //       , _compute.pipelineLayout
+ //       , 0
+ //       , static_cast<uint32_t>(computeWriteDescriptorSets.size())
+ //       , computeWriteDescriptorSets.data());
 
-    vkCmdBindDescriptorSets(_compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.pipelineLayout, 0, 1, &_compute.descriptorSet, 0, 0);
+ //   //vkCmdBindDescriptorSets(_compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.pipelineLayout, 0, 1, &_compute.descriptorSet, 0, 0);
 
-    // inline int divup(int a, int b) { return (a + (b - 1)) / b; }
-    vkCmdDispatch(_compute.commandBuffer, 256, (_compute.curve_input.n_points + 255) / 256, 1);
+ //   // inline int divup(int a, int b) { return (a + (b - 1)) / b; }
+ //   vkCmdDispatch(_compute.commandBuffer, 256, (_compute.curve_input.n_points + 255) / 256, 1);
 
-    // release the storage buffers back to the graphics queue
-    //addComputeToGraphicsBarriers(compute.commandBuffers[i]);
-    vkEndCommandBuffer(_compute.commandBuffer);
-}
-
-void ScanlineVGRasterizer::addComputeToComputeBarriers(VkCommandBuffer commandBuffer)
-{
-    VkBufferMemoryBarrier bufferBarrier = vk::initializer::bufferMemoryBarrier();
-    bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    bufferBarrier.srcQueueFamilyIndex = _vulkanDevice->queueFamilyIndices.compute;
-    bufferBarrier.dstQueueFamilyIndex = _vulkanDevice->queueFamilyIndices.compute;
-    bufferBarrier.size = VK_WHOLE_SIZE;
-    std::vector<VkBufferMemoryBarrier> bufferBarriers;
-    bufferBarriers.push_back(bufferBarrier);
-    bufferBarrier.buffer = _compute.storage_buffers.transformed_pos->buffer();
-    bufferBarriers.push_back(bufferBarrier);
-    bufferBarrier.buffer = _compute.storage_buffers.path_visible->buffer();
-    bufferBarriers.push_back(bufferBarrier);
-    vkCmdPipelineBarrier(
-        commandBuffer,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        VK_FLAGS_NONE,
-        0, nullptr,
-        static_cast<uint32_t>(bufferBarriers.size()), bufferBarriers.data(),
-        0, nullptr);
+ //   // release the storage buffers back to the graphics queue
+ //   //addComputeToGraphicsBarriers(compute.commandBuffers[i]);
+ //   vkEndCommandBuffer(_compute.commandBuffer);
 }
 
 void ScanlineVGRasterizer::buildCommandBuffers()
@@ -579,26 +640,41 @@ void ScanlineVGRasterizer::prepareComputeBuffers()
     // storage buffer
     _csb.transformed_pos = GPU_VULKAN_BUFFER(vec2);
     _csb.path_visible = GPU_VULKAN_BUFFER(int32_t);
+    _csb.curve_pixel_count = GPU_VULKAN_BUFFER(uint32_t);
+    _csb.monotonic_cutpoint_cache = GPU_VULKAN_BUFFER(float);
+    _csb.test = GPU_VULKAN_BUFFER(int);
 
-    _csb.transformed_pos->resizeWithoutCopy(_in_curve.n_points * sizeof(vec2));
-    _csb.path_visible->resizeWithoutCopy(_in_path.n_paths * sizeof(int32_t));
+    _csb.transformed_pos->resizeWithoutCopy(_in_curve.n_points);
+    _csb.path_visible->resizeWithoutCopy(_in_path.n_paths);
 
+    _compute.storage_buffers.test->resizeWithoutCopy(1);
+
+    // mono
+    _csb.curve_pixel_count->resizeWithoutCopy(_in_curve.n_curves + 1);
+    _csb.monotonic_cutpoint_cache->resizeWithoutCopy(_in_curve.n_curves * 5);
 
     // uniform buffer
     usage_flags = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     memory_property_flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT 
         | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    _cub.transformPosUBO = GPU_VULKAN_BUFFER(UBO);
+    _cub.k_trans_pos_ubo = GPU_VULKAN_BUFFER(TransPosIn);
+    _cub.k_make_inte_ubo = GPU_VULKAN_BUFFER(MakeInteIn);
     
-    _c.ubo.n_points = _in_curve.n_points;
-    _c.ubo.w = _width;
-    _c.ubo.h = _height;
-    _c.ubo.m0 = vec4(1, 0, 0, 0);
-    _c.ubo.m1 = vec4(0, 1, 0, 0);
-    _c.ubo.m2 = vec4(0, 0, 1, 0);
-    _c.ubo.m3 = vec4(0, 0, 0, 1);
+    _c.trans_pos_in.n_points = _in_curve.n_points;
+    _c.trans_pos_in.w = _width;
+    _c.trans_pos_in.h = _height;
+    _c.trans_pos_in.m0 = vec4(1, 0, 0, 0);
+    _c.trans_pos_in.m1 = vec4(0, 1, 0, 0);
+    _c.trans_pos_in.m2 = vec4(0, 0, 1, 0);
+    _c.trans_pos_in.m3 = vec4(0, 0, 0, 1);
 
-    _cub.transformPosUBO->set(_c.ubo, sizeof(UBO));
+    _c.make_inte_in.w = _width;
+    _c.make_inte_in.h = _height;
+    _c.make_inte_in.n_curves = _in_curve.n_curves;
+
+    _cub.k_trans_pos_ubo->set(_c.trans_pos_in, 1);
+    _cub.k_make_inte_ubo->set(_c.make_inte_in, 1);
+    
     
 }
 

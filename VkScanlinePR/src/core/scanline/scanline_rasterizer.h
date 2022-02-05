@@ -15,6 +15,9 @@
 #include "../vulkan/vk_vg_rasterizer.h"
 #include "../vulkan/vulkan_buffer.h"
 #include "../rasterizer.h"
+
+#include "../common/compute_kernal.h"
+#include "compute_ubo.h"
 #include "vk_vg_data.h"
 
 #include <GLFW/glfw3.h>
@@ -24,12 +27,6 @@ using namespace glm;
 
 namespace Galaxysailing {
 
-struct UBO {
-    uint32_t n_points;
-    float w, h;
-    alignas(16) glm::vec4 m0, m1, m2, m3;
-
-};
 
 class ScanlineVGRasterizer : public VulkanVGRasterizerBase, public VGRasterizer {
 // ----------------------------- rasterizer interface ------------------------
@@ -78,7 +75,6 @@ private:
 
 private:
     void buildComputeCommandBuffer();
-    void addComputeToComputeBarriers(VkCommandBuffer commandBuffer);
 
 private:
 
@@ -102,20 +98,8 @@ private:
         VkVGInputCurveData curve_input;
         VkVGInputPathData path_input;
 
-        VkDescriptorSetLayout descriptorSetLayout;
-        VkDescriptorSet descriptorSet;
-
-        VkPipelineLayout pipelineLayout;
-        VkPipeline pipeline;
-
         VkQueue queue;
-        VkCommandPool commandPool;
-        VkCommandBuffer commandBuffer;
-
-        struct Semaphores {
-            VkSemaphore ready{ 0L };
-            VkSemaphore complete{ 0L };
-        } semaphores;
+        VkCommandPool cmd_pool;
 
         struct {
             // transfromed
@@ -127,19 +111,29 @@ private:
             VULKAN_BUFFER_PTR(float) monotonic_cutpoint_cache;
             VULKAN_BUFFER_PTR(float) intersection;
 
+            // for test
+            VULKAN_BUFFER_PTR(int) test;
+
 
         } storage_buffers;
 
 
-        UBO ubo;
+        TransPosIn trans_pos_in;
+        MakeInteIn make_inte_in;
 
         struct {
-            VULKAN_BUFFER_PTR(UBO) transformPosUBO;
+            VULKAN_BUFFER_PTR(TransPosIn) k_trans_pos_ubo;
+            VULKAN_BUFFER_PTR(MakeInteIn) k_make_inte_ubo;
         } uniform_buffers;
 
     } _compute;
 
-    
+    std::shared_ptr<ComputeKernal> k_transform_pos;
+    std::shared_ptr<ComputeKernal> k_make_intersection_0;
+    //std::shared_ptr<ComputeKernal> k_make_intersection_1;
+
+
+    VkPhysicalDevicePushDescriptorPropertiesKHR pushDescriptorProps{};
 
 };
 

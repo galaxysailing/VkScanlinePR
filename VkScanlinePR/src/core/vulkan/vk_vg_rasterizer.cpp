@@ -56,7 +56,7 @@ void VulkanVGRasterizerBase::initVulkan()
 	// This is handled by a separate class that gets a logical device representation
 	// and encapsulates functions related to a device
 	_vulkanDevice = std::make_shared<vk::VulkanDevice>(_physicalDevice);
-	VkResult res = _vulkanDevice->createLogicalDevice(_enabledFeatures, enabledDeviceExtensions, deviceCreatepNextChain);
+	VkResult res = _vulkanDevice->createLogicalDevice(_enabledFeatures, _enabledDeviceExtensions, deviceCreatepNextChain);
 	/*if (res != VK_SUCCESS) {
 		vk::util::exitFatal("Could not create Vulkan device: \n" + vk::util::errorString(res), res);
 		return false;

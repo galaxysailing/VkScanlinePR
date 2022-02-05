@@ -160,6 +160,8 @@
     <ClInclude Include="src\app\vg_app.h" />
     <ClInclude Include="src\core\common\camera.hpp" />
     <ClInclude Include="src\core\rasterizer.h" />
+    <ClInclude Include="src\core\common\compute_kernal.h" />
+    <ClInclude Include="src\core\scanline\compute_ubo.h" />
     <ClInclude Include="src\core\scanline\scanline_rasterizer.h" />
     <ClInclude Include="src\core\scanline\vk_vg_data.h" />
     <ClInclude Include="src\core\vg\rvg.h" />

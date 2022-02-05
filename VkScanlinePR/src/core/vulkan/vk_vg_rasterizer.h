@@ -75,7 +75,7 @@ protected:
 	/** @brief Set of physical device features to be enabled for this example (must be set in the derived constructor) */
 	VkPhysicalDeviceFeatures _enabledFeatures{};
 	/** @brief Set of device extensions to be enabled for this example (must be set in the derived constructor) */
-	std::vector<const char*> enabledDeviceExtensions;
+	std::vector<const char*> _enabledDeviceExtensions;
 	std::vector<const char*> _enabledInstanceExtensions;
 	/** @brief Optional pNext structure for passing extension structures to device creation */
 	void* deviceCreatepNextChain = nullptr;
