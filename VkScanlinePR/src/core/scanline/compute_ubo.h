@@ -14,6 +14,7 @@ struct TransPosIn {
 
 struct MakeInteIn {
     uint32_t n_curves;
+    uint32_t n_fragments;
     int w, h;
 };
 };

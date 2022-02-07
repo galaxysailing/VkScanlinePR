@@ -149,10 +149,12 @@ namespace vulkan {
 			return _buffer;
 		}
 
+
+
 	public:
 		union {
 			VkDescriptorBufferInfo buf_info;
-		} descriptor;
+		} desc;
 
 	private:
 
@@ -221,9 +223,9 @@ namespace vulkan {
 		}
 
 		void setupDescriptor() {
-			descriptor.buf_info.offset = 0;
-			descriptor.buf_info.buffer = _buffer;
-			descriptor.buf_info.range = _size;
+			desc.buf_info.offset = 0;
+			desc.buf_info.buffer = _buffer;
+			desc.buf_info.range = _size;
 		}
 
 		VkBufferUsageFlags _usage_flags;

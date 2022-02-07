@@ -1,41 +1,369 @@
 #version 450
+#define BLOCK_SIZE 256
+#define FRAG_SIZE 2
 
+#define SHARED_MAP(i) (shared_index + (i) * BLOCK_SIZE)
+#define CUT_POINT_MAP(i) (4 * i)
+#define LERP(a, b, t) ((a) * (1-(t)) + (b) * (t))
+#define MAX(a, b) ((a)>(b)?(a):(b))
+#define MIN(a, b) ((a)<(b)?(a):(b))
+#define CLAMP(v, mi, ma) (MIN(MAX(v, mi), ma)) 
+#define PATH_INVISIBLE(mask)( \
+    ((mask & 0x11111000) == 0)      \
+    || ((mask & 0x01101011) == 0)   \
+    || ((mask & 0x00011111) == 0)   \
+    || ((mask & 0x11010110) == 0)   \
+)
+#define PATH_VISIBLE(mask) (!(PATH_INVISIBLE(mask)))
+
+#define LINE 0x01
+#define QUADRIC 0x03
+#define CUBIC 0x04
+#define ARC 0x13
+
+// ---------------------- buffer -------------------------
 layout(std140, binding = 0)uniform UBO{
     uint n_curves;
     int w, h;
 }ubo;
 
-// layout(std430, binding = 1) buffer CurveType{
-//     uint curve_type[];
-// };
+layout(std430, binding = 1) buffer CurveType{
+    uint curve_type[];
+};
 
-// layout(std430, binding = 2) buffer CurvePosMap{
-//     uint curve_pos_map[];
-// };
+layout(std430, binding = 2) buffer CurvePosMap{
+    uint curve_pos_map[];
+};
 
-// layout(std430, binding = 3) buffer TransformedPos{
-//     vec2 transformed_pos[];
-// };
+layout(std430, binding = 3) buffer TransformedPos{
+    vec2 transformed_pos[];
+};
 
-// layout(std430, binding = 4) buffer CurvePathIdx{
-//     uint curve_path_idx[];
-// };
+layout(std430, binding = 4) buffer CurvePathIdx{
+    uint curve_path_idx[];
+};
 
-// layout(std430, binding = 5) buffer PathVisible{
-//     uint path_visible[];
-// };
+layout(std430, binding = 5) buffer PathVisible{
+    int path_visible[];
+};
 
+layout(std430, binding = 6) buffer CutPointCache{
+    float monotonic_cutpoint_cache[];
+};
+
+layout(std430, binding = 7) buffer NCutsCache{
+    uint monotonic_n_cuts_cache[];
+};
+
+layout(std430, binding = 8) buffer CurvePixelCnt{
+    uint curve_pixel_count[];
+};
+
+shared struct {
+    float t1_queue[5 * BLOCK_SIZE];
+    float point_coords[10 * BLOCK_SIZE];
+} _shared;
+
+// ------------------------------------------------------
+
+// -------------------- helper function -----------------
+
+void solveQuadEquation(float a, float b, float c, out float r0, out float r1){
+    if(a == 0.0f){
+        r0 = r1 = -c / b;
+        return;
+    }
+    float half_b = 0.5f * b;
+
+    float delta = half_b * half_b - a * c;
+    if(delta < 0.0f){
+        r0 = r1 = 0.0f;
+        return;
+    }else if(delta == 0.0f){
+        r0 = r1 = -b / (2.0f * a);
+        return;
+    }
+
+    float s_delta = sqrt(delta);
+
+    r0 = -(half_b + s_delta) / a;
+    r1 = (-half_b + s_delta) / a;
+    
+}
+
+float interpolateGeneralCurve(uint curve_type, float t, uint shared_index, uint offset){
+    float res = 1.0f;
+    switch(curve_type){
+        case LINE:{
+            float x0 = _shared.point_coords[SHARED_MAP(offset * 4 + 0)];
+            float x1 = _shared.point_coords[SHARED_MAP(offset * 4 + 1)];
+            res = LERP(x0, x1, t);
+            break;
+        }
+        case QUADRIC:{
+            // TODO
+            break;
+        }
+        case CUBIC:{
+            float ix0 = _shared.point_coords[SHARED_MAP(offset * 4 + 0)];
+            float ix1 = _shared.point_coords[SHARED_MAP(offset * 4 + 1)];
+            float ix2 = _shared.point_coords[SHARED_MAP(offset * 4 + 2)];
+            float ix3 = _shared.point_coords[SHARED_MAP(offset * 4 + 3)];
+
+            float qx0 = LERP(ix0, ix1, t);
+            float qx1 = LERP(ix1, ix2, t);
+            float qx2 = LERP(ix2, ix3, t);
+
+            float lx0 = LERP(qx0, qx1, t);
+            float lx1 = LERP(qx1, qx2, t);
+
+            res = LERP(lx0, lx1, t);
+            break;
+        }
+        default:break;
+    }
+
+    return res;
+}
+
+void get_xy_begin_end(vec2 p0, vec2 p1, out int xbegin, out int xend, out int ybegin, out int yend){
+    if(p0.x <= p1.x) {
+        xbegin = (int(p0.x / FRAG_SIZE)) * FRAG_SIZE + FRAG_SIZE;
+        xend = (int(p1.x / FRAG_SIZE)) * FRAG_SIZE;
+    } else {
+        xbegin = (int(p1.x / FRAG_SIZE)) * FRAG_SIZE + FRAG_SIZE;
+        xend = (int(p0.x / FRAG_SIZE)) * FRAG_SIZE;
+    }
+
+    if(p0.y <= p1.y) {
+        ybegin = (int(p0.y / FRAG_SIZE)) * FRAG_SIZE + FRAG_SIZE;
+        yend = (int(p1.y / FRAG_SIZE)) * FRAG_SIZE;
+    } else {
+        ybegin = (int(p1.y / FRAG_SIZE)) * FRAG_SIZE + FRAG_SIZE;
+        yend = (int(p0.y / FRAG_SIZE)) * FRAG_SIZE;
+    }
+}
+
+void udpate_cut_range(int w, int h, out int xbegin, out int xend, out int ybegin, out int yend, out uint cut_n_x, out uint cut_n_y){
+    int cut_x_min = 0;
+	// int cut_x_max = w & 0xFFFFFFFE + FRAG_SIZE;
+    int cut_x_max = w + FRAG_SIZE;
+	int cut_y_min = 0;
+	int cut_y_max = h + FRAG_SIZE;
+	// width, height: 1200, 1024
+	// cut_x_max, cut_y_max: 1202, 1026
+
+	if (
+		(xbegin < cut_x_min && xend < cut_x_min) 
+		|| (xbegin > cut_x_max && xend > cut_x_max)
+		|| (xbegin > xend)
+		) {
+		cut_n_x = 0;
+	}
+	else {
+        
+		xbegin = CLAMP(xbegin, cut_x_min, cut_x_max);
+		xend = CLAMP(xend, cut_x_min, cut_x_max);
+
+		cut_n_x = MAX(uint(xend - xbegin) / FRAG_SIZE + 1, 0);
+	}
+
+	if (
+		(ybegin < cut_y_min && yend < cut_y_min) 
+		|| (ybegin > cut_y_max && yend > cut_y_max)
+		|| (ybegin > yend)
+		) {
+		cut_n_y = 0;
+	}
+	else {
+        
+		ybegin = CLAMP(ybegin, cut_y_min, cut_y_max);
+		yend = CLAMP(yend, cut_y_min, cut_y_max);
+
+		cut_n_y = MAX(uint(yend - ybegin) / FRAG_SIZE + 1, 0);
+	}
+}
+
+
+// ------------------------------------------------------
 
 void main() {
     uvec3 id = gl_GlobalInvocationID;
 
-    // curve id
-    uint ci = id.y * 256 + id.x;
-    if (ci > ubo.n_curves){ 
+    // curve idx
+    uint cidx = id.y * BLOCK_SIZE + id.x;
+    if (cidx >= ubo.n_curves){ 
 		return;
     }
 
+    uint shared_index = id.x;
 
+    uint poidx = curve_pos_map[cidx];
 
+    uint ct_idx = cidx / 4;
+    uint ct_offset = cidx % 4;
+    // little end: 
+    // offset           0   1   2   3
+    // value            01  02  04  08
+    // result 32-bit:   0x08040201
+    uint c_type = ((curve_type[ct_idx] >> ct_offset) & 0x000000FF);
 
+    for(uint i = 0; i < 4; ++i){
+        if(i < (c_type & 7)){
+            vec2 p = transformed_pos[poidx + i];
+            _shared.point_coords[SHARED_MAP(i)] = p.x;
+            _shared.point_coords[SHARED_MAP(i + 4)] = p.y;
+        }
+    }
+
+    uint n_cuts = 0;
+    uint pidx = curve_path_idx[cidx];
+    bool is_visible = PATH_VISIBLE(path_visible[pidx]);
+
+	// monotonize
+	float q0 = 0.f, q1 = 0.f, q2 = 0.f, q3 = 0.f;
+
+    if(is_visible){
+        for(uint c = 0; c < 2; ++c){
+            switch(c_type){
+                case LINE:{ 
+                    //do nothing, it's monotone already
+                    break;
+                }
+                case QUADRIC:{
+                    break;
+                }
+                case CUBIC:{
+                    float x0 = _shared.point_coords[SHARED_MAP(c * 4 + 0)];
+                    float x1 = _shared.point_coords[SHARED_MAP(c * 4 + 1)];
+                    float x2 = _shared.point_coords[SHARED_MAP(c * 4 + 2)];
+                    float x3 = _shared.point_coords[SHARED_MAP(c * 4 + 3)];
+
+                    float r0 = 0.0f, r1 = 0.0f;
+                    solveQuadEquation(
+                        3.0f * (x1 - x2) + (x3 - x0)
+                        , 2.0f * ((x0 - x1) + (x2 - x1))
+                        , x1 - x0
+                        , r0, r1
+                    );
+                    if(r0 > 0.0f && r0 < 1.0f){
+                        _shared.t1_queue[SHARED_MAP(n_cuts)] = r0;
+                        ++n_cuts;
+                    }
+
+                    if(r1 > 0.0f && r1 < 1.0f && r1 != r0){
+                        _shared.t1_queue[SHARED_MAP(n_cuts)] = r1;
+                        ++n_cuts;
+                    }
+
+                    break;
+                }
+                case ARC:{
+
+                    break;
+                }
+                default:break;
+            }
+        }
+
+        q0 = _shared.t1_queue[SHARED_MAP(0)];
+        q1 = _shared.t1_queue[SHARED_MAP(1)];
+        q2 = _shared.t1_queue[SHARED_MAP(2)];
+        q3 = _shared.t1_queue[SHARED_MAP(3)];
+
+        if (n_cuts >= 2) {
+			float t1 = q1;
+			float t0 = q0;
+			if (t1 < t0) {
+				q1 = t0;
+				q0 = t1;
+			}
+		}
+		if (n_cuts >= 3) {
+			float t2 = q2;
+			float t1 = q1;
+			if (t2 < t1) {
+				q2 = t1;
+				float t0 = q0;
+				if (t2 < t0) {
+					q1 = t0;
+					q0 = t2;
+				}
+				else {
+					q1 = t2;
+				}
+			}
+		}
+		if (n_cuts >= 4) {
+			float t3 = q3;
+			float t2 = q3;
+			if (t3 < t2) {
+				q3 = t2;
+				float t1 = q1;
+				if (t3 < t1) {
+					q2 = t1;
+					float t0 = q0;
+					if (t3 < t0) {
+						q1 = t0;
+						q0 = t3;
+					}
+					else {
+						q1 = t3;
+					}
+				}
+				else {
+					q2 = t3;
+				}
+			}
+		}
+    }
+
+    //cache 
+	_shared.t1_queue[SHARED_MAP(0)] = q0;
+	_shared.t1_queue[SHARED_MAP(1)] = q1;
+	_shared.t1_queue[SHARED_MAP(2)] = q2;
+	_shared.t1_queue[SHARED_MAP(3)] = q3;
+    
+    monotonic_cutpoint_cache[CUT_POINT_MAP(cidx) + 0] = q0;
+    monotonic_cutpoint_cache[CUT_POINT_MAP(cidx) + 1] = q1;
+    monotonic_cutpoint_cache[CUT_POINT_MAP(cidx) + 2] = q2;
+    monotonic_cutpoint_cache[CUT_POINT_MAP(cidx) + 3] = q3;
+
+    monotonic_n_cuts_cache[cidx] = n_cuts;
+
+	if (is_visible) { 
+        _shared.t1_queue[SHARED_MAP(n_cuts)] = 1.f;
+        n_cuts++;
+    }
+
+    // pixel count 
+    vec2 p0_ms = vec2(_shared.point_coords[SHARED_MAP(0)], _shared.point_coords[SHARED_MAP(4)]);
+
+    uint pcnt = 0;
+    for(uint i = 0; i < n_cuts; ++i){
+        float t1_ms = _shared.t1_queue[SHARED_MAP(i)];
+        vec2 p1_ms = vec2( interpolateGeneralCurve(c_type, t1_ms, shared_index, 0)
+            , interpolateGeneralCurve(c_type, t1_ms, shared_index, 1));
+        
+        int curve_x_begin, curve_x_end;
+        int curve_y_begin, curve_y_end;
+
+        get_xy_begin_end(p0_ms, p1_ms
+            , curve_x_begin, curve_x_end
+            , curve_y_begin, curve_y_end);
+
+        uint cut_n_x = 0;
+        uint cut_n_y = 0;
+        
+        udpate_cut_range(ubo.w, ubo.h
+			, curve_x_begin, curve_x_end
+			, curve_y_begin, curve_y_end
+			, cut_n_x, cut_n_y);
+
+        pcnt += cut_n_x + cut_n_y + 1;
+
+        p0_ms = p1_ms;
+    }
+    
+    curve_pixel_count[cidx] = pcnt;
 }

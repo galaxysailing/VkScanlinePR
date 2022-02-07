@@ -72,11 +72,15 @@ public:
 			pointData.pos.push_back(p[0]);
 			pointData.pos.push_back(p[1]);
 			break;
+		case CurveType::QUADRIC:
+			break;
 		case CurveType::CUBIC:
 			pointData.pos.push_back(p[0]);
 			pointData.pos.push_back(p[1]);
 			pointData.pos.push_back(p[2]);
 			pointData.pos.push_back(p[3]);
+			break;
+		case CurveType::ARC:
 			break;
 		default: break;
 		}

@@ -109,10 +109,8 @@ private:
             // monotonize
             VULKAN_BUFFER_PTR(uint32_t) curve_pixel_count;
             VULKAN_BUFFER_PTR(float) monotonic_cutpoint_cache;
+            VULKAN_BUFFER_PTR(uint32_t) monotonic_n_cuts_cache;
             VULKAN_BUFFER_PTR(float) intersection;
-
-            // for test
-            VULKAN_BUFFER_PTR(int) test;
 
 
         } storage_buffers;
@@ -130,7 +128,7 @@ private:
 
     std::shared_ptr<ComputeKernal> k_transform_pos;
     std::shared_ptr<ComputeKernal> k_make_intersection_0;
-    //std::shared_ptr<ComputeKernal> k_make_intersection_1;
+    std::shared_ptr<ComputeKernal> k_make_intersection_1;
 
 
     VkPhysicalDevicePushDescriptorPropertiesKHR pushDescriptorProps{};
