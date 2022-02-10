@@ -4,10 +4,10 @@
 
 #define SHARED_MAP(i) (shared_index + (i) * BLOCK_SIZE)
 #define CUT_POINT_MAP(i) (4 * i)
-#define LERP(a, b, t) ((a) * (1-(t)) + (b) * (t))
-#define MAX(a, b) ((a)>(b)?(a):(b))
-#define MIN(a, b) ((a)<(b)?(a):(b))
-#define CLAMP(v, mi, ma) (MIN(MAX(v, mi), ma)) 
+#define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
+#define MAX(a, b) (((a)>(b))?(a):(b))
+#define MIN(a, b) (((a)<(b))?(a):(b))
+#define CLAMP(v, mi, ma) (MIN(ma, MAX(v, mi))) 
 #define PATH_INVISIBLE(mask)( \
     ((mask & 0x11111000) == 0)      \
     || ((mask & 0x01101011) == 0)   \
@@ -16,7 +16,7 @@
 )
 #define PATH_VISIBLE(mask) (!(PATH_INVISIBLE(mask)))
 
-#define LINE 0x01
+#define LINE 0x02
 #define QUADRIC 0x03
 #define CUBIC 0x04
 #define ARC 0x13
@@ -24,6 +24,7 @@
 // ---------------------- buffer -------------------------
 layout(std140, binding = 0)uniform UBO{
     uint n_curves;
+    uint n_fragments;
     int w, h;
 }ubo;
 
@@ -56,7 +57,7 @@ layout(std430, binding = 7) buffer NCutsCache{
 };
 
 layout(std430, binding = 8) buffer CurvePixelCnt{
-    uint curve_pixel_count[];
+    int curve_pixel_count[];
 };
 
 shared struct {
@@ -98,6 +99,7 @@ float interpolateGeneralCurve(uint curve_type, float t, uint shared_index, uint 
             float x0 = _shared.point_coords[SHARED_MAP(offset * 4 + 0)];
             float x1 = _shared.point_coords[SHARED_MAP(offset * 4 + 1)];
             res = LERP(x0, x1, t);
+            
             break;
         }
         case QUADRIC:{
@@ -128,28 +130,30 @@ float interpolateGeneralCurve(uint curve_type, float t, uint shared_index, uint 
 
 void get_xy_begin_end(vec2 p0, vec2 p1, out int xbegin, out int xend, out int ybegin, out int yend){
     if(p0.x <= p1.x) {
-        xbegin = (int(p0.x / FRAG_SIZE)) * FRAG_SIZE + FRAG_SIZE;
-        xend = (int(p1.x / FRAG_SIZE)) * FRAG_SIZE;
+        xbegin = (int(p0.x / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
+        xend = (int(p1.x / FRAG_SIZE) * FRAG_SIZE);
     } else {
-        xbegin = (int(p1.x / FRAG_SIZE)) * FRAG_SIZE + FRAG_SIZE;
-        xend = (int(p0.x / FRAG_SIZE)) * FRAG_SIZE;
+        xbegin = (int(p1.x / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
+        xend = (int(p0.x / FRAG_SIZE) * FRAG_SIZE);
     }
 
     if(p0.y <= p1.y) {
-        ybegin = (int(p0.y / FRAG_SIZE)) * FRAG_SIZE + FRAG_SIZE;
-        yend = (int(p1.y / FRAG_SIZE)) * FRAG_SIZE;
+        ybegin = (int(p0.y / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
+        yend = (int(p1.y / FRAG_SIZE) * FRAG_SIZE);
     } else {
-        ybegin = (int(p1.y / FRAG_SIZE)) * FRAG_SIZE + FRAG_SIZE;
-        yend = (int(p0.y / FRAG_SIZE)) * FRAG_SIZE;
+        ybegin = (int(p1.y / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
+        yend = (int(p0.y / FRAG_SIZE) * FRAG_SIZE);
     }
 }
 
-void udpate_cut_range(int w, int h, out int xbegin, out int xend, out int ybegin, out int yend, out uint cut_n_x, out uint cut_n_y){
+// 'out' key word will let variable become 0
+void udpate_cut_range(int w, int h, int xbegin, int xend, int ybegin, int yend, out int cut_n_x, out int cut_n_y){
     int cut_x_min = 0;
-	// int cut_x_max = w & 0xFFFFFFFE + FRAG_SIZE;
+	// int cut_x_max = (w & 0xFFFFFFFE) + FRAG_SIZE;
     int cut_x_max = w + FRAG_SIZE;
 	int cut_y_min = 0;
-	int cut_y_max = h + FRAG_SIZE;
+	// int cut_y_max = (h & 0xFFFFFFFE) + FRAG_SIZE;
+    int cut_y_max = h + FRAG_SIZE;
 	// width, height: 1200, 1024
 	// cut_x_max, cut_y_max: 1202, 1026
 
@@ -165,7 +169,7 @@ void udpate_cut_range(int w, int h, out int xbegin, out int xend, out int ybegin
 		xbegin = CLAMP(xbegin, cut_x_min, cut_x_max);
 		xend = CLAMP(xend, cut_x_min, cut_x_max);
 
-		cut_n_x = MAX(uint(xend - xbegin) / FRAG_SIZE + 1, 0);
+		cut_n_x = MAX((xend - xbegin) / FRAG_SIZE + 1, 0);
 	}
 
 	if (
@@ -180,7 +184,7 @@ void udpate_cut_range(int w, int h, out int xbegin, out int xend, out int ybegin
 		ybegin = CLAMP(ybegin, cut_y_min, cut_y_max);
 		yend = CLAMP(yend, cut_y_min, cut_y_max);
 
-		cut_n_y = MAX(uint(yend - ybegin) / FRAG_SIZE + 1, 0);
+		cut_n_y = MAX((yend - ybegin) / FRAG_SIZE + 1, 0);
 	}
 }
 
@@ -190,7 +194,7 @@ void udpate_cut_range(int w, int h, out int xbegin, out int xend, out int ybegin
 void main() {
     uvec3 id = gl_GlobalInvocationID;
 
-    // curve idx
+    // curve index
     uint cidx = id.y * BLOCK_SIZE + id.x;
     if (cidx >= ubo.n_curves){ 
 		return;
@@ -200,8 +204,8 @@ void main() {
 
     uint poidx = curve_pos_map[cidx];
 
-    uint ct_idx = cidx / 4;
-    uint ct_offset = cidx % 4;
+    uint ct_idx = (cidx >> 2);
+    uint ct_offset = (cidx % 4) << 3;
     // little end: 
     // offset           0   1   2   3
     // value            01  02  04  08
@@ -339,7 +343,7 @@ void main() {
     // pixel count 
     vec2 p0_ms = vec2(_shared.point_coords[SHARED_MAP(0)], _shared.point_coords[SHARED_MAP(4)]);
 
-    uint pcnt = 0;
+    int pcnt = 0;
     for(uint i = 0; i < n_cuts; ++i){
         float t1_ms = _shared.t1_queue[SHARED_MAP(i)];
         vec2 p1_ms = vec2( interpolateGeneralCurve(c_type, t1_ms, shared_index, 0)
@@ -352,18 +356,20 @@ void main() {
             , curve_x_begin, curve_x_end
             , curve_y_begin, curve_y_end);
 
-        uint cut_n_x = 0;
-        uint cut_n_y = 0;
+        int cut_n_x = 0;
+        int cut_n_y = 0;
+        
+        // curve_pixel_count[cidx] = (curve_y_end > curve_y_begin)?curve_y_end - curve_y_begin:0;
         
         udpate_cut_range(ubo.w, ubo.h
 			, curve_x_begin, curve_x_end
 			, curve_y_begin, curve_y_end
 			, cut_n_x, cut_n_y);
 
-        pcnt += cut_n_x + cut_n_y + 1;
+        pcnt += 1 + cut_n_x + cut_n_y;
 
         p0_ms = p1_ms;
     }
-    
+
     curve_pixel_count[cidx] = pcnt;
 }

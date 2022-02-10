@@ -164,11 +164,19 @@ void ScanlineVGRasterizer::loadVG(std::shared_ptr<VGContainer> vg_input)
 
 
     // debug
-    //uint64* ptr = (uint64*)_in_curve.curve_type->cptr();
+    //uint32* ptr = (uint32*)_in_curve.curve_type->cptr();
     //uint8* tmp = _in_curve.curve_type->cptr();
     //printf("-------------------- begin --------------------\n");
     //for (int i = 0; i < _compute.curve_input.n_curves; ++i, ++ptr) {
-    //    printf("%llu\n", *ptr);
+    //    printf("0x%08x\n", *ptr);
+    //    uint offset = 0;
+    //    printf("%u\n", ((ptr[0] >> offset) & 0x000000FF));
+    //    offset += 8;
+    //    printf("%u\n", ((ptr[0] >> offset) & 0x000000FF));
+    //    offset += 8;
+    //    printf("%u\n", ((ptr[0] >> offset) & 0x000000FF));
+    //    offset += 8;
+    //    printf("%u\n", ((ptr[0] >> offset) & 0x000000FF));
     //}
     //printf("-------------------- end --------------------\n");
 
@@ -312,17 +320,25 @@ void ScanlineVGRasterizer::drawFrame()
 
     _Base::submitFrame();
 
+    // for point debug
+    //vec2* ptr = _compute.storage_buffers.transformed_pos->cptr();
+    //printf("-------------------- begin --------------------\n");
+    //for (int i = 0; i < _compute.curve_input.n_points; ++i, ++ptr) {
+    //    printf("%f, %f\n", ptr->x, ptr->y);
+    //}
+    //printf("-------------------- end --------------------\n");
+
     // for path debug
-    int32_t* ptr = _compute.storage_buffers.path_visible->cptr();
-    printf("-------------------- begin --------------------\n");
-    for (int i = 0; i < _compute.path_input.n_paths; ++i, ++ptr) {
-        printf("%d\n", *ptr);
-        //printf("%f, %f\n", ptr->x, ptr->y);
-    }
-    printf("-------------------- end --------------------\n");
+    //int32_t* ptr = _compute.storage_buffers.path_visible->cptr();
+    //printf("-------------------- begin --------------------\n");
+    //for (int i = 0; i < _compute.path_input.n_paths; ++i, ++ptr) {
+    //    printf("%d\n", *ptr);
+    //    //printf("%f, %f\n", ptr->x, ptr->y);
+    //}
+    //printf("-------------------- end --------------------\n");
 
     // for curve debug
-    //uint32_t* ptr = _compute.storage_buffers.curve_pixel_count->cptr();
+    //int32_t* ptr = _compute.storage_buffers.curve_pixel_count->cptr();
     //printf("-------------------- begin --------------------\n");
     //for (int i = 0; i < _compute.curve_input.n_curves; ++i, ++ptr) {
     //    printf("%d\n", *ptr);
@@ -682,7 +698,7 @@ void ScanlineVGRasterizer::prepareComputeBuffers()
     // storage buffer
     _csb.transformed_pos = GPU_VULKAN_BUFFER(vec2);
     _csb.path_visible = GPU_VULKAN_BUFFER(int32_t);
-    _csb.curve_pixel_count = GPU_VULKAN_BUFFER(uint32_t);
+    _csb.curve_pixel_count = GPU_VULKAN_BUFFER(int32_t);
     _csb.monotonic_cutpoint_cache = GPU_VULKAN_BUFFER(float);
     _csb.monotonic_n_cuts_cache = GPU_VULKAN_BUFFER(uint32_t);
 
@@ -704,8 +720,8 @@ void ScanlineVGRasterizer::prepareComputeBuffers()
     _c.trans_pos_in.n_points = _in_curve.n_points;
     _c.trans_pos_in.w = _width;
     _c.trans_pos_in.h = _height;
-    _c.trans_pos_in.m0 = vec4(1.034343, 0, 0, 204.363617);
-    _c.trans_pos_in.m1 = vec4(0, 1.034343, 0, 0);
+    _c.trans_pos_in.m0 = vec4(1.03434348, 0, 0, 204.363617);
+    _c.trans_pos_in.m1 = vec4(0, 1.03434348, 0, 0);
     _c.trans_pos_in.m2 = vec4(0, 0, 1, 0);
     _c.trans_pos_in.m3 = vec4(0, 0, 0, 1);
 

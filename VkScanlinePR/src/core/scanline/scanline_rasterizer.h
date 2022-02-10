@@ -107,7 +107,7 @@ private:
             VULKAN_BUFFER_PTR(int32_t) path_visible;
 
             // monotonize
-            VULKAN_BUFFER_PTR(uint32_t) curve_pixel_count;
+            VULKAN_BUFFER_PTR(int32_t) curve_pixel_count;
             VULKAN_BUFFER_PTR(float) monotonic_cutpoint_cache;
             VULKAN_BUFFER_PTR(uint32_t) monotonic_n_cuts_cache;
             VULKAN_BUFFER_PTR(float) intersection;

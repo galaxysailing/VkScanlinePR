@@ -8,7 +8,7 @@ namespace Galaxysailing {
 
 enum class CurveType {
 	NONE = 0x00,
-	LINE = 0x01,
+	LINE = 0x02,
 	QUADRIC = 0x03,
 	CUBIC = 0x04,
 	ARC = 0x13
