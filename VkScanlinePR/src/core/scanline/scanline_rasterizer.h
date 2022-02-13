@@ -54,6 +54,9 @@ private:
 // ------------------------------ Scaline PR rasterization ---------------------
 private:
     void prepareGraphics();
+
+    void prepareCompute();
+
 private:
 
     void mockDataload();
@@ -63,18 +66,15 @@ private:
     void prepareTexelBuffers();
     void buildCommandBuffers();
 
-private:
-    void prepareComputeBuffers();
-
     void setupDescriptorPool();
     void setupLayoutsAndDescriptors();
 
     void preparePipelines();
 
-    void prepareCompute();
 
 private:
-    void buildComputeCommandBuffer();
+    void prepareComputeBuffers();
+    void prepareCommonComputeKernal();
 
 private:
 
@@ -95,6 +95,8 @@ private:
     } graphics;
 
     struct {
+        PFN_vkCmdPushDescriptorSetKHR vkCmdPushDescriptorSetKHR;
+
         VkVGInputCurveData curve_input;
         VkVGInputPathData path_input;
 
@@ -126,12 +128,24 @@ private:
 
     } _compute;
 
-    std::shared_ptr<ComputeKernal> k_transform_pos;
-    std::shared_ptr<ComputeKernal> k_make_intersection_0;
-    std::shared_ptr<ComputeKernal> k_make_intersection_1;
+    struct {
+        // common
+        std::shared_ptr<ComputeKernal> scan;
+
+        std::shared_ptr<ComputeKernal> transform_pos;
+        std::shared_ptr<ComputeKernal> make_intersection_0;
+        std::shared_ptr<ComputeKernal> make_intersection_1;
+    } _kernal;
 
 
     VkPhysicalDevicePushDescriptorPropertiesKHR pushDescriptorProps{};
+
+private:
+
+    // const
+    const std::string COMPUTE_SPV_DIR = "shaders/compute/spv/";
+    const std::string COMMON_COMPUTE_SPV_DIR = "shaders/common/spv/";
+    const int BLOCK_SIZE = 256;
 
 };
 

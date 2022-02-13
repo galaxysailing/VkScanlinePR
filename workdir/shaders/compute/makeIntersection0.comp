@@ -2,6 +2,8 @@
 #define BLOCK_SIZE 256
 #define FRAG_SIZE 2
 
+layout (local_size_x = BLOCK_SIZE) in;
+
 #define SHARED_MAP(i) (shared_index + (i) * BLOCK_SIZE)
 #define CUT_POINT_MAP(i) (4 * i)
 #define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
