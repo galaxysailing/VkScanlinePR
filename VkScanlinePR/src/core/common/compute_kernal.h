@@ -65,10 +65,9 @@ public:
             vk::initializer::commandBufferAllocateInfo(compute_cmd_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
         VK_CHECK_RESULT(vkAllocateCommandBuffers(_device, &cmd_buf_alloc_info, &cmd_buffer));
 
-        // synchronized
+        // GPU-GPU synchronization
         VkSemaphoreCreateInfo sem_ci= vk::initializer::semaphoreCreateInfo();
-        VK_CHECK_RESULT(vkCreateSemaphore(_device, &sem_ci, nullptr, &semaphores.ready));
-        VK_CHECK_RESULT(vkCreateSemaphore(_device, &sem_ci, nullptr, &semaphores.complete));
+        VK_CHECK_RESULT(vkCreateSemaphore(_device, &sem_ci, nullptr, &semaphore));
     }
 
     ComputeKernal* beginCmdBuffer(bool one_time = false) {
@@ -128,10 +127,23 @@ public:
         vkEndCommandBuffer(cmd_buffer);
     }
 
-    void submit() {
+    VkSubmitInfo submitInfo(bool is_first_draw, std::vector<VkSemaphore>& wait_sema, std::vector<VkSemaphore>& signal_sema, const VkPipelineStageFlags *wait_dst_stage_masks) {
+        VkSubmitInfo sub = vk::initializer::submitInfo();
+        
+        if (!is_first_draw) {
+            //wait_sema.push_back(semaphores.ready);
+            sub.pWaitDstStageMask = wait_dst_stage_masks;
+            sub.waitSemaphoreCount = static_cast<uint32_t>(wait_sema.size());
+            sub.pWaitSemaphores = wait_sema.data();
+        }
+        signal_sema.push_back(semaphore);
+        sub.signalSemaphoreCount = static_cast<uint32_t>(signal_sema.size());
+        sub.pSignalSemaphores = signal_sema.data();
+        sub.commandBufferCount = 1;
+        sub.pCommandBuffers = &cmd_buffer;
 
+        return sub;
     }
-
 
 private:
     VkDevice _device = VK_NULL_HANDLE;
@@ -147,11 +159,7 @@ private:
 
 public:
     VkCommandBuffer cmd_buffer = VK_NULL_HANDLE;
-    struct Semaphores {
-        VkSemaphore ready{ 0L };
-        VkSemaphore complete{ 0L };
-    } semaphores;
-
+    VkSemaphore semaphore;
 };
 
 }

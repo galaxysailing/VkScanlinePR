@@ -126,6 +126,8 @@ private:
             VULKAN_BUFFER_PTR(MakeInteIn) k_make_inte_ubo;
         } uniform_buffers;
 
+        // CPU-GPU synchronization
+        VkFence fence;
     } _compute;
 
     struct {

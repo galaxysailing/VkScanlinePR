@@ -268,38 +268,31 @@ void ScanlineVGRasterizer::mockDataload() {
     std::cout << "load success\n";
 }
 void ScanlineVGRasterizer::drawFrame()
-{
-    auto& _k = _kernal;
-    static bool is_first_draw = true;
-    VkSubmitInfo transpos_submit = vk::initializer::submitInfo();
-    // FIXME find a better way to do this (without using fences, which is much slower)
-    VkPipelineStageFlags compute_wait_dst_stage_mask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-    if (!is_first_draw) {
-        transpos_submit.waitSemaphoreCount = 1;
-        transpos_submit.pWaitSemaphores = &_k.transform_pos->semaphores.ready;
-        transpos_submit.pWaitDstStageMask = &compute_wait_dst_stage_mask;
-    }
-    transpos_submit.signalSemaphoreCount = 1;
-    transpos_submit.pSignalSemaphores = &_k.transform_pos->semaphores.complete;
-    transpos_submit.commandBufferCount = 1;
-    transpos_submit.pCommandBuffers = &_k.transform_pos->cmd_buffer;
+{   
+    auto& k_scan = *(_kernal.scan);
 
+    auto& k_transform_pos = *(_kernal.transform_pos);
+    auto& k_make_inte_0 = *(_kernal.make_intersection_0);
+
+    static bool is_first_draw = true;
+    std::vector<VkPipelineStageFlags> wait_dst_stage_masks = { VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT };
+
+    // transform position
+    std::vector<VkSemaphore> wait_sema = {};
+    std::vector<VkSemaphore> signal_sema = {};
+    VkSubmitInfo transpos_submit = k_transform_pos.submitInfo(is_first_draw, wait_sema, signal_sema, wait_dst_stage_masks.data());
     VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &transpos_submit, VK_NULL_HANDLE));
 
-    VkSubmitInfo make_inte_submit = vk::initializer::submitInfo();
-    if (!is_first_draw) {
-        std::array<VkSemaphore, 2> wait_sema{ _k.make_intersection_0->semaphores.ready
-            ,  _k.transform_pos->semaphores.complete };
-        make_inte_submit.waitSemaphoreCount = static_cast<uint32_t>(wait_sema.size());
-        make_inte_submit.pWaitSemaphores = wait_sema.data();
-        make_inte_submit.pWaitDstStageMask = &compute_wait_dst_stage_mask;
-    }
-    make_inte_submit.signalSemaphoreCount = 1;
-    make_inte_submit.pSignalSemaphores = &_k.make_intersection_0->semaphores.complete;
-    make_inte_submit.commandBufferCount = 1;
-    make_inte_submit.pCommandBuffers = &_k.make_intersection_0->cmd_buffer;
+    is_first_draw = false;
 
-    VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &make_inte_submit, VK_NULL_HANDLE));
+    // make intersection 0
+    VkSubmitInfo make_inte_0_submit = k_make_inte_0.submitInfo(is_first_draw
+        , wait_sema = { k_transform_pos.semaphore }
+        , signal_sema = {}
+        , wait_dst_stage_masks.data()
+    );
+
+    VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &make_inte_0_submit, VK_NULL_HANDLE));
 
     // exclusive scan
     {
@@ -308,31 +301,18 @@ void ScanlineVGRasterizer::drawFrame()
             PUSH_SB_WRITE_DESC_SET(0, &_compute.storage_buffers.curve_pixel_count->desc.buf_info),
             PUSH_SB_WRITE_DESC_SET(1, &_compute.storage_buffers.curve_pixel_count->desc.buf_info)
         };
-        _k.scan->beginCmdBuffer(true)
+        k_scan.beginCmdBuffer(true)
             ->cmdPushDescSet(write_desc_sets)
             ->cmdPushConst(0, sizeof(int32_t), &_compute.curve_input.n_curves)
             ->cmdDispatch(1)
             ->endCmdBuffer();
-
-        VkSubmitInfo scan_submit = vk::initializer::submitInfo();
-        if (!is_first_draw) {
-            std::array<VkSemaphore, 2> wait_sema{ _k.scan->semaphores.ready
-                ,  _k.make_intersection_0->semaphores.complete };
-            scan_submit.waitSemaphoreCount = static_cast<uint32_t>(wait_sema.size());
-            scan_submit.pWaitSemaphores = wait_sema.data();
-            scan_submit.pWaitDstStageMask = &compute_wait_dst_stage_mask;
-        }
-        else {
-            is_first_draw = false;
-        }
-        scan_submit.signalSemaphoreCount = 1;
-        scan_submit.pSignalSemaphores = &_k.scan->semaphores.complete;
-        scan_submit.commandBufferCount = 1;
-        scan_submit.pCommandBuffers = &_k.scan->cmd_buffer;
-
+        VkSubmitInfo scan_submit = k_scan.submitInfo(is_first_draw
+            , wait_sema = {k_make_inte_0.semaphore}
+            , signal_sema = {}
+            , wait_dst_stage_masks.data()
+        );
         VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &scan_submit, VK_NULL_HANDLE));
     }
-    
 
     // Submit graphics commands
     _Base::prepareFrame();
@@ -340,14 +320,12 @@ void ScanlineVGRasterizer::drawFrame()
         VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
     };
 
-    std::array<VkSemaphore,2> waitSemaphores = {
+    std::array<VkSemaphore, 2> waitSemaphores = {
         _semaphores.presentComplete
-        //, _k.make_intersection_0->semaphores.complete
-        , _k.scan->semaphores.complete
+        , k_scan.semaphore
     };
-    std::array<VkSemaphore,2> signalSemaphores = {
+    std::array<VkSemaphore, 1> signalSemaphores = {
         _semaphores.renderComplete
-        , _k.scan->semaphores.ready
     };
     submitInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
     submitInfo.pWaitSemaphores = waitSemaphores.data();
@@ -359,7 +337,6 @@ void ScanlineVGRasterizer::drawFrame()
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &_drawCmdBuffers[_currentBuffer];
     VK_CHECK_RESULT(vkQueueSubmit(_presentQueue, 1, &submitInfo, VK_NULL_HANDLE));
-
     _Base::submitFrame();
 
     // for point debug
@@ -381,7 +358,7 @@ void ScanlineVGRasterizer::drawFrame()
 
     // for curve debug
     int32_t* ptr = _compute.storage_buffers.curve_pixel_count->cptr();
-
+    printf("-------------------- begin --------------------\n");
     for (int i = 0; i < _compute.curve_input.n_curves; ++i, ++ptr) {
         printf("%d\n", *ptr);
         //printf("%f, %f\n", ptr->x, ptr->y);
@@ -583,6 +560,11 @@ void ScanlineVGRasterizer::prepareCompute()
 //    // Build a single command buffer containing the compute dispatch commands
 //    buildComputeCommandBuffer();
 
+
+    // CPU-GPU synchronization
+    VkFenceCreateInfo fenceInfo = vk::initializer::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    VK_CHECK_RESULT(vkCreateFence(_device, &fenceInfo, VK_NULL_HANDLE, &_compute.fence));
 
     prepareCommonComputeKernal();
     auto& _c = _compute;
