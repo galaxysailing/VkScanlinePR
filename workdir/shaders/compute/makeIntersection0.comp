@@ -5,7 +5,7 @@
 layout (local_size_x = BLOCK_SIZE) in;
 
 #define SHARED_MAP(i) (shared_index + (i) * BLOCK_SIZE)
-#define CUT_POINT_MAP(i) (4 * i)
+#define CUT_POINT_MAP(i) (5 * i)
 #define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
 #define MAX(a, b) (((a)>(b))?(a):(b))
 #define MIN(a, b) (((a)<(b))?(a):(b))
@@ -54,11 +54,7 @@ layout(std430, binding = 6) buffer CutPointCache{
     float monotonic_cutpoint_cache[];
 };
 
-layout(std430, binding = 7) buffer NCutsCache{
-    uint monotonic_n_cuts_cache[];
-};
-
-layout(std430, binding = 8) buffer CurvePixelCnt{
+layout(std430, binding = 7) buffer CurvePixelCnt{
     int curve_pixel_count[];
 };
 
@@ -159,8 +155,7 @@ void udpate_cut_range(int w, int h, int xbegin, int xend, int ybegin, int yend, 
 	// width, height: 1200, 1024
 	// cut_x_max, cut_y_max: 1202, 1026
 
-	if (
-		(xbegin < cut_x_min && xend < cut_x_min) 
+	if ((xbegin < cut_x_min && xend < cut_x_min) 
 		|| (xbegin > cut_x_max && xend > cut_x_max)
 		|| (xbegin > xend)
 		) {
@@ -174,8 +169,7 @@ void udpate_cut_range(int w, int h, int xbegin, int xend, int ybegin, int yend, 
 		cut_n_x = MAX((xend - xbegin) / FRAG_SIZE + 1, 0);
 	}
 
-	if (
-		(ybegin < cut_y_min && yend < cut_y_min) 
+	if ((ybegin < cut_y_min && yend < cut_y_min) 
 		|| (ybegin > cut_y_max && yend > cut_y_max)
 		|| (ybegin > yend)
 		) {
@@ -194,15 +188,13 @@ void udpate_cut_range(int w, int h, int xbegin, int xend, int ybegin, int yend, 
 // ------------------------------------------------------
 
 void main() {
-    uvec3 id = gl_GlobalInvocationID;
-
     // curve index
-    uint cidx = id.y * BLOCK_SIZE + id.x;
+    uint cidx = gl_WorkGroupID.x * BLOCK_SIZE + gl_LocalInvocationID.x;
     if (cidx >= ubo.n_curves){ 
 		return;
     }
 
-    uint shared_index = id.x;
+    uint shared_index = gl_LocalInvocationID.x;
 
     uint poidx = curve_pos_map[cidx];
 
@@ -334,8 +326,7 @@ void main() {
     monotonic_cutpoint_cache[CUT_POINT_MAP(cidx) + 1] = q1;
     monotonic_cutpoint_cache[CUT_POINT_MAP(cidx) + 2] = q2;
     monotonic_cutpoint_cache[CUT_POINT_MAP(cidx) + 3] = q3;
-
-    monotonic_n_cuts_cache[cidx] = n_cuts;
+    monotonic_cutpoint_cache[CUT_POINT_MAP(cidx) + 4] = uintBitsToFloat(n_cuts);
 
 	if (is_visible) { 
         _shared.t1_queue[SHARED_MAP(n_cuts)] = 1.f;

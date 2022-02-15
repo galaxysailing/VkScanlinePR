@@ -31,9 +31,7 @@ layout(std430, binding = 4) buffer PathVisible{
 
 
 void main() {
-    uvec3 id = gl_GlobalInvocationID;
-
-    uint poi = id.y * BLOCK_SIZE + id.x;
+    uint poi = gl_WorkGroupID.x * BLOCK_SIZE + gl_LocalInvocationID.x;
     if (poi >= ubo.n_points){ 
 		return;
     }

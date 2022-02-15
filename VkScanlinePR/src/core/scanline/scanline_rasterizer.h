@@ -63,6 +63,8 @@ private:
 
     void drawFrame();
 
+    void drawDebug();
+
     void prepareTexelBuffers();
     void buildCommandBuffers();
 
@@ -111,15 +113,19 @@ private:
             // monotonize
             VULKAN_BUFFER_PTR(int32_t) curve_pixel_count;
             VULKAN_BUFFER_PTR(float) monotonic_cutpoint_cache;
-            VULKAN_BUFFER_PTR(uint32_t) monotonic_n_cuts_cache;
+            //VULKAN_BUFFER_PTR(uint32_t) monotonic_n_cuts_cache;
             VULKAN_BUFFER_PTR(float) intersection;
+            VULKAN_BUFFER_PTR(int32_t) fragment_data;
 
-
+            //for debug
+            VULKAN_BUFFER_PTR(int32_t) debug;
         } storage_buffers;
 
 
         TransPosIn trans_pos_in;
         MakeInteIn make_inte_in;
+
+        int n_fragments;
 
         struct {
             VULKAN_BUFFER_PTR(TransPosIn) k_trans_pos_ubo;
@@ -127,7 +133,7 @@ private:
         } uniform_buffers;
 
         // CPU-GPU synchronization
-        VkFence fence;
+        //VkFence fence;
     } _compute;
 
     struct {

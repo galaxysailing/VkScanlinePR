@@ -70,6 +70,7 @@ public:
         VK_CHECK_RESULT(vkCreateSemaphore(_device, &sem_ci, nullptr, &semaphore));
     }
 
+    // ---------------------- command ------------------------------
     ComputeKernal* beginCmdBuffer(bool one_time = false) {
         VkCommandBufferBeginInfo cmd_buf_info = vk::initializer::commandBufferBeginInfo();
         cmd_buf_info.flags = one_time ? VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT : VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
@@ -102,7 +103,7 @@ public:
         vkEndCommandBuffer(cmd_buffer);
         return this;
     }
-
+    // -----------------------------------------------------------------
 
     void buildCmdBuffer(uint32_t groupX, const vector<VkWriteDescriptorSet>& write_desc_sets, bool one_time = false) {
         VkCommandBufferBeginInfo cmd_buf_info = vk::initializer::commandBufferBeginInfo();

@@ -97,12 +97,12 @@ namespace vulkan {
 
 		void clear() {
 			VkDevice device = _device->logicalDevice;
-			vkUnmapMemory(device, _host_data.memory);
 			_host_data.ptr = nullptr;
 			if (_host_data.buf) {
 				vkDestroyBuffer(device, _host_data.buf, nullptr);
 			}
 			if (_host_data.memory) {
+				//vkUnmapMemory(device, _host_data.memory);
 				vkFreeMemory(device, _host_data.memory, nullptr);
 			}
 		}
@@ -143,6 +143,30 @@ namespace vulkan {
 				_host_data.ptr = (T*)ppdata;
 			}
 			return _host_data.ptr;
+		}
+
+		T operator[](uint32_t index) {
+			VkCommandBuffer copy_cmd = _device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+			VkBufferCopy copy_region = {};
+			copy_region.size = static_cast<VkDeviceSize>(sizeof(T));
+			copy_region.srcOffset = static_cast<VkDeviceSize>(index * sizeof(T));
+
+			VkBuffer buf = VK_NULL_HANDLE;
+			VkDeviceMemory memory = VK_NULL_HANDLE;
+
+			VK_CHECK_RESULT(_device->createBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT
+				, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+				, copy_region.size, &buf, &memory));
+			vkCmdCopyBuffer(copy_cmd, _buffer, buf, 1, &copy_region);
+			void* pdata;
+			vkMapMemory(_device->logicalDevice, memory, 0, copy_region.size, 0, &pdata);
+			_device->flushCommandBuffer(copy_cmd, _queue, true);
+			T res = *((T*)pdata);
+
+			// destroy
+			vkDestroyBuffer(_device->logicalDevice, buf, nullptr);
+			vkFreeMemory(_device->logicalDevice, memory, nullptr);
+			return res;
 		}
 
 		VkBuffer buffer() {
