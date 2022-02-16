@@ -6,7 +6,7 @@
 
 layout (local_size_x = BATCH_SIZE) in;
 
-#define DATA_MAP(id) (bidx * (BATCH_SIZE - 1) + (id))
+#define DATA_MAP(offset, id) ((bidx * (BATCH_SIZE - 1) + (id)) + offset)
 
 layout(std430, binding = 0) buffer DataInput{
     int data_input[];
@@ -17,17 +17,21 @@ layout(std430, binding = 1) buffer DataOuput{
 };
 
 layout (push_constant) uniform PushConsts {
-	int n_curves;
-} pushConsts;
+	layout(offset = 0)int n;
+    layout(offset = 4)int i_offset;
+    layout(offset = 8)int o_offset;
+} push_consts;
 
 // shared_data[BATCH_SIZE<<1] is a initial value
 shared int shared_data[(BATCH_SIZE << 1) + 1];
 
 void main(){
     int thid = int(gl_LocalInvocationID.x);
-    int n_curves = pushConsts.n_curves;
+    int n = push_consts.n;
+    int i_offset = push_consts.i_offset;
+    int o_offset = push_consts.o_offset;
     int pout = 0, pin = 1;
-    int batch_number = n_curves / (BATCH_SIZE - 1);
+    int batch_number = n / (BATCH_SIZE - 1);
 
     if(thid == 0){
         shared_data[BATCH_SIZE << 1] = 0;
@@ -36,7 +40,7 @@ void main(){
 
     for(int bidx = 0; bidx <= batch_number; ++bidx){
 
-        shared_data[pout * BATCH_SIZE + thid] = ((thid > 0) ? data_input[DATA_MAP(thid - 1)] : shared_data[BATCH_SIZE << 1]);
+        shared_data[pout * BATCH_SIZE + thid] = ((thid > 0) ? data_input[DATA_MAP(i_offset, thid - 1)] : shared_data[BATCH_SIZE << 1]);
         _SYNC_();
 
         for(int offset = 1; offset < BATCH_SIZE; offset <<= 1){
@@ -55,9 +59,9 @@ void main(){
             shared_data[BATCH_SIZE << 1] = shared_data[pout * BATCH_SIZE + thid];
         }else{
             if(bidx != batch_number - 1){
-                data_output[DATA_MAP(thid)] = shared_data[pout * BATCH_SIZE + thid];
-            }else if(DATA_MAP(thid) <= n_curves){
-                data_output[DATA_MAP(thid)] = shared_data[pout * BATCH_SIZE + thid];
+                data_output[DATA_MAP(o_offset, thid)] = shared_data[pout * BATCH_SIZE + thid];
+            }else if(DATA_MAP(0, thid) <= n){
+                data_output[DATA_MAP(o_offset, thid)] = shared_data[pout * BATCH_SIZE + thid];
             }
         }
         _SYNC_();

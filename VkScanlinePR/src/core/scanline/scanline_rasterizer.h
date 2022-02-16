@@ -140,11 +140,12 @@ private:
     struct {
         // common
         std::shared_ptr<ComputeKernal> scan;
+        std::shared_ptr<ComputeKernal> seg_sort;
 
+        // for scanline pr
         std::shared_ptr<ComputeKernal> transform_pos;
         std::shared_ptr<ComputeKernal> make_intersection_0;
         std::shared_ptr<ComputeKernal> make_intersection_1;
-
         std::shared_ptr<ComputeKernal> gen_fragment;
     } _kernal;
 

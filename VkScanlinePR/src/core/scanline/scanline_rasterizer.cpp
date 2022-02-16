@@ -344,9 +344,13 @@ void ScanlineVGRasterizer::drawFrame()
             PUSH_SB_WRITE_DESC_SET(0, &csb_curve_pixel_count.desc.buf_info),
             PUSH_SB_WRITE_DESC_SET(1, &csb_curve_pixel_count.desc.buf_info)
         };
+        int i_offset = 0;
+        int o_offset = 0;
         k_scan.beginCmdBuffer(true)
             ->cmdPushDescSet(write_desc_sets)
-            ->cmdPushConst(0, sizeof(int32_t), &_compute.curve_input.n_curves)
+            ->cmdPushConst(0, 4, &_compute.curve_input.n_curves)
+            ->cmdPushConst(4, 4, &i_offset)
+            ->cmdPushConst(8, 4, &o_offset)
             ->cmdDispatch(1)
             ->endCmdBuffer();
         VkSubmitInfo scan_submit = k_scan.submitInfo(is_first_draw
@@ -478,24 +482,24 @@ void ScanlineVGRasterizer::drawDebug()
     //printf("-------------------- end --------------------\n");
 
     // for curve debug
-    //int32_t* ptr = _compute.storage_buffers.curve_pixel_count->cptr();
-    //printf("-------------------- begin --------------------\n");
-    //for (int i = 0; i <= _compute.curve_input.n_curves; ++i) {
-    //    printf("%d\n", ptr[i]);
-    //    //printf("%f, %f\n", ptr->x, ptr->y);
-    //}
-    //printf("-------------------- end --------------------\n");
-
-    // for fragments
-    int* ptr = _compute.storage_buffers.fragment_data->cptr();
+    int32_t* ptr = _compute.storage_buffers.curve_pixel_count->cptr();
     printf("-------------------- begin --------------------\n");
-    for (int i = 0; i <= _compute.stride_fragments; ++i) {
-        int yx = ptr[i];
-        int16_t y = (int16_t)((yx >> 16) - 0x7FFF);
-        int16_t x = (int16_t)((yx & 0xFFFF) - 0x7FFF);
-        printf("%d: %hd, %hd\n", i, x, y);
+    for (int i = 0; i <= _compute.curve_input.n_curves; ++i) {
+        printf("%d\n", ptr[i]);
+        //printf("%f, %f\n", ptr->x, ptr->y);
     }
     printf("-------------------- end --------------------\n");
+
+    // for fragments
+    //int* ptr = _compute.storage_buffers.fragment_data->cptr();
+    //printf("-------------------- begin --------------------\n");
+    //for (int i = 0; i <= _compute.stride_fragments; ++i) {
+    //    int yx = ptr[i];
+    //    int16_t y = (int16_t)((yx >> 16) - 0x7FFF);
+    //    int16_t x = (int16_t)((yx & 0xFFFF) - 0x7FFF);
+    //    printf("%d: %hd, %hd\n", i, x, y);
+    //}
+    //printf("-------------------- end --------------------\n");
 
     //float* ptr = _compute.storage_buffers.monotonic_cutpoint_cache->cptr();
     //ptr += 4;
@@ -899,7 +903,7 @@ void ScanlineVGRasterizer::prepareCommonComputeKernal()
         VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
     };
     std::vector<VkPushConstantRange> scan_pcr{
-        vk::initializer::pushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, sizeof(int32_t), 0)
+        vk::initializer::pushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, sizeof(int32_t) * 3, 0)
     };
     _k.scan = COMPUTE_KERNAL(scan_dt, COMMON_COMPUTE_SPV_DIR + "naive_scan.comp.spv", &scan_pcr);
 
