@@ -17,12 +17,13 @@
 
 #define GPU_VULKAN_BUFFER(T) NEW_VULKAN_BUFFER(T, _vulkanDevice, usage_flags, memory_property_flags, queue)
 
-#define COMPUTE_KERNAL(desc_types, shader) std::make_shared<ComputeKernal>(_device, _pipelineCache \
+#define COMPUTE_KERNAL(desc_types, shader, pcr) std::make_shared<ComputeKernal>(_device, _pipelineCache \
 , desc_types                                                                                       \
 , _compute.cmd_pool                                                                         \
 , true                                                                                      \
 , loadShader(shader, VK_SHADER_STAGE_COMPUTE_BIT)                                           \
-, _compute.vkCmdPushDescriptorSetKHR)    
+, _compute.vkCmdPushDescriptorSetKHR                                                        \
+, pcr)                   
 
 #define DESC_TYPE_SB VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
 #define DESC_TYPE_UB VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
@@ -305,6 +306,7 @@ void ScanlineVGRasterizer::drawFrame()
     auto& k_transform_pos = *(_kernal.transform_pos);
     auto& k_make_inte_0 = *(_kernal.make_intersection_0);
     auto& k_make_inte_1 = *(_kernal.make_intersection_1);
+    auto& k_gen_fragment = *(_kernal.gen_fragment);
 
     static bool is_first_draw = true;
     std::vector<VkPipelineStageFlags> wait_dst_stage_masks = { VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT };
@@ -360,6 +362,8 @@ void ScanlineVGRasterizer::drawFrame()
 
     // make intersection 1
     int32_t stride_fragments = (n_fragments + 256) & -256;
+
+    _c.stride_fragments = stride_fragments;
     _csb.intersection->resizeWithoutCopy(n_fragments * 2 + 2);
     _csb.fragment_data->resizeWithoutCopy(8 * stride_fragments + 1);
     
@@ -390,10 +394,33 @@ void ScanlineVGRasterizer::drawFrame()
     wait_compute = k_make_inte_1.semaphore;
     
     // gen_fragment_and_stencil_mask
+    write_desc_sets = {
+        PUSH_SB_WRITE_DESC_SET(0, &_csb.intersection->desc.buf_info),
+        PUSH_SB_WRITE_DESC_SET(1, &_in_curve.curve_path_idx->desc.buf_info),
+        PUSH_SB_WRITE_DESC_SET(2, &_in_curve.curve_position_map->desc.buf_info),
+        PUSH_SB_WRITE_DESC_SET(3, &_in_curve.curve_type->desc.buf_info),
+        PUSH_SB_WRITE_DESC_SET(4, &_csb.transformed_pos->desc.buf_info),
+        PUSH_SB_WRITE_DESC_SET(5, &_csb.fragment_data->desc.buf_info),
+    };
+    k_gen_fragment.beginCmdBuffer(true)
+        ->cmdPushDescSet(write_desc_sets)
+        ->cmdPushConst(0, sizeof(uint32_t), &_compute.path_input.n_paths)
+        ->cmdPushConst(sizeof(uint32_t), sizeof(uint32_t), &_compute.curve_input.n_curves)
+        ->cmdPushConst(sizeof(uint32_t) * 2, sizeof(int32_t), &n_fragments)
+        ->cmdPushConst(sizeof(uint32_t) * 3, sizeof(int32_t), &stride_fragments)
+        ->cmdPushConst(sizeof(uint32_t) * 4, sizeof(int32_t), &_width)
+        ->cmdPushConst(sizeof(uint32_t) * 5, sizeof(int32_t), &_height)
+        ->cmdDispatch(divup(n_fragments, BLOCK_SIZE))
+        ->endCmdBuffer();
+    VkSubmitInfo gen_frag_submit = k_gen_fragment.submitInfo(is_first_draw
+        , wait_sema = { k_make_inte_1.semaphore }
+        , signal_sema = {}
+        , wait_dst_stage_masks.data()
+    );
+    VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &gen_frag_submit, VK_NULL_HANDLE));
+    wait_compute = k_gen_fragment.semaphore;
 
-
-
-
+    // seg sort
 
 
     // Submit graphics commands
@@ -443,6 +470,12 @@ void ScanlineVGRasterizer::drawDebug()
     //    //printf("%f, %f\n", ptr->x, ptr->y);
     //}
     //printf("-------------------- end --------------------\n");
+    //int* ptr = _compute.storage_buffers.fragment_data->cptr();
+    //printf("-------------------- begin --------------------\n");
+    //for (int i = 0; i <= _compute.path_input.n_paths; ++i) {
+    //    printf("%d: %d\n", i, ptr[3 * _compute.stride_fragments + i]);
+    //}
+    //printf("-------------------- end --------------------\n");
 
     // for curve debug
     //int32_t* ptr = _compute.storage_buffers.curve_pixel_count->cptr();
@@ -454,12 +487,15 @@ void ScanlineVGRasterizer::drawDebug()
     //printf("-------------------- end --------------------\n");
 
     // for fragments
-    //float* ptr = _compute.storage_buffers.intersection->cptr();
-    //printf("-------------------- begin --------------------\n");
-    //for (int i = 0; i <= _compute.n_fragments; ++i) {
-    //    printf("%d: %u, %f\n", i, float_as_uint(ptr[i * 2]), ptr[i * 2 + 1]);
-    //}
-    //printf("-------------------- end --------------------\n");
+    int* ptr = _compute.storage_buffers.fragment_data->cptr();
+    printf("-------------------- begin --------------------\n");
+    for (int i = 0; i <= _compute.stride_fragments; ++i) {
+        int yx = ptr[i];
+        int16_t y = (int16_t)((yx >> 16) - 0x7FFF);
+        int16_t x = (int16_t)((yx & 0xFFFF) - 0x7FFF);
+        printf("%d: %hd, %hd\n", i, x, y);
+    }
+    printf("-------------------- end --------------------\n");
 
     //float* ptr = _compute.storage_buffers.monotonic_cutpoint_cache->cptr();
     //ptr += 4;
@@ -704,7 +740,7 @@ void ScanlineVGRasterizer::prepareCompute()
         PUSH_SB_WRITE_DESC_SET(3, &_csb.transformed_pos->desc.buf_info),
         PUSH_SB_WRITE_DESC_SET(4, &_csb.path_visible->desc.buf_info)
     };
-    _k.transform_pos = COMPUTE_KERNAL(wds2dt(wds_transform), COMPUTE_SPV_DIR + "transformPos.comp.spv");
+    _k.transform_pos = COMPUTE_KERNAL(wds2dt(wds_transform), COMPUTE_SPV_DIR + "transform_pos.comp.spv", nullptr);
     _k.transform_pos->buildCmdBuffer(divup(_compute.curve_input.n_points, BLOCK_SIZE), wds_transform);
 
     // make intersection 0
@@ -718,7 +754,7 @@ void ScanlineVGRasterizer::prepareCompute()
         PUSH_SB_WRITE_DESC_SET(6, &_csb.monotonic_cutpoint_cache->desc.buf_info),
         PUSH_SB_WRITE_DESC_SET(7, &_csb.curve_pixel_count->desc.buf_info)
     };
-    _k.make_intersection_0 = COMPUTE_KERNAL(wds2dt(wds_make_int_0), COMPUTE_SPV_DIR + "makeIntersection0.comp.spv");
+    _k.make_intersection_0 = COMPUTE_KERNAL(wds2dt(wds_make_int_0), COMPUTE_SPV_DIR + "make_intersection_0.comp.spv", nullptr);
     _k.make_intersection_0->buildCmdBuffer(divup(_compute.curve_input.n_curves, BLOCK_SIZE), wds_make_int_0);
 
     // make intersection 1
@@ -729,10 +765,19 @@ void ScanlineVGRasterizer::prepareCompute()
         DESC_TYPE_SB,DESC_TYPE_SB,
         DESC_TYPE_SB,DESC_TYPE_SB
     };
-    _k.make_intersection_1 = COMPUTE_KERNAL(dt_make_int_1, COMPUTE_SPV_DIR + "makeIntersection1.comp.spv");
+    _k.make_intersection_1 = COMPUTE_KERNAL(dt_make_int_1, COMPUTE_SPV_DIR + "make_intersection_1.comp.spv", nullptr);
     //_k.make_intersection_1->buildCmdBuffer(divup(_compute.curve_input.n_curves, BLOCK_SIZE), wds_make_int_1);
     
-
+    // generate fragments
+    std::vector<VkDescriptorType> dt_gen_fragment{
+        DESC_TYPE_SB,DESC_TYPE_SB,
+        DESC_TYPE_SB,DESC_TYPE_SB,
+        DESC_TYPE_SB,DESC_TYPE_SB
+    };
+    std::vector<VkPushConstantRange> gen_frag_pcr{
+        vk::initializer::pushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, sizeof(int32_t) * 6, 0)
+    };
+    _k.gen_fragment = COMPUTE_KERNAL(dt_gen_fragment, COMPUTE_SPV_DIR + "gen_fragment.comp.spv", &gen_frag_pcr);
 
 }
 
@@ -856,13 +901,7 @@ void ScanlineVGRasterizer::prepareCommonComputeKernal()
     std::vector<VkPushConstantRange> scan_pcr{
         vk::initializer::pushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, sizeof(int32_t), 0)
     };
-    _k.scan = std::make_shared<ComputeKernal>(_device, _pipelineCache 
-        , scan_dt
-        , _compute.cmd_pool
-        , true
-        , loadShader(COMMON_COMPUTE_SPV_DIR + "naive_scan.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT)
-        , _compute.vkCmdPushDescriptorSetKHR
-        , &scan_pcr);
+    _k.scan = COMPUTE_KERNAL(scan_dt, COMMON_COMPUTE_SPV_DIR + "naive_scan.comp.spv", &scan_pcr);
 
 }
 

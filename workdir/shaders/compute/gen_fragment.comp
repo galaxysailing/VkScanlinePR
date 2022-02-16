@@ -1,0 +1,236 @@
+#version 450
+#define BLOCK_SIZE 256
+#define FRAG_SIZE 2
+
+layout (local_size_x = BLOCK_SIZE) in;
+
+#define MAX(a, b) (((a)>(b))?(a):(b))
+#define MIN(a, b) (((a)<(b))?(a):(b))
+#define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
+
+// fragment data offset
+#define FD_POS(i) (i)
+#define FD_SORT_INDEX(i) ((i) + stride_fragments)
+#define FD_PATH_IDX(i) ((i) + stride_fragments * 2)
+#define FD_SORT_SEGMENT(i) ((i) + stride_fragments * 3)
+#define FD_SCAN_WN(i) ((i) + stride_fragments * 4)
+
+#define LINE 0x02
+#define QUADRIC 0x03
+#define CUBIC 0x04
+#define ARC 0x13
+
+layout (push_constant) uniform PushConsts {
+    layout(offset = 0)uint n_paths;
+	layout(offset = 4)uint n_curves;
+    layout(offset = 8)int n_fragments;
+    layout(offset = 12)int stride_fragments;
+    layout(offset = 16)int width;
+    layout(offset = 20)int height;
+} push_consts;
+
+// --------------------------- buffer --------------------------
+layout(std430, binding = 0) buffer Intersection{
+    ivec2 intersection[];
+};
+
+layout(std430, binding = 1) buffer CurvePathIdx{
+    uint curve_path_idx[];
+};
+
+layout(std430, binding = 2) buffer CurvePosMap{
+    uint curve_pos_map[];
+};
+
+layout(std430, binding = 3) buffer CurveType{
+    uint curve_type[];
+};
+
+layout(std430, binding = 4) buffer TransformedPos{
+    vec2 transformed_pos[];
+};
+
+layout(std430, binding = 5) buffer FragmentData{
+    int fragment_data[];
+};
+// ------------------------------------------------------------
+
+// ------------------------- helper ---------------------------
+vec2 curve_interpolate(uint curve_type, float t, in vec2 cv0, in vec2 cv1, in vec2 cv2, in vec2 cv3){
+    vec2 res = vec2(0.0f, 0.0f);
+    switch(curve_type){
+        case LINE:{
+            res = LERP(cv0, cv1, t);
+            break;
+        }
+        case QUADRIC:{
+            // TODO
+            break;
+        }
+        case CUBIC:{
+            vec2 qx0 = LERP(cv0, cv1, t);
+            vec2 qx1 = LERP(cv1, cv2, t);
+            vec2 qx2 = LERP(cv2, cv3, t);
+
+            vec2 lx0 = LERP(qx0, qx1, t);
+            vec2 lx1 = LERP(qx1, qx2, t);
+
+            res = LERP(lx0, lx1, t);
+            break;
+        }
+        case ARC:{
+            // TODO
+            break;
+        }
+    }
+    return res;
+}
+// ------------------------------------------------------------
+
+void main(){
+    uint fidx = gl_WorkGroupID.x * BLOCK_SIZE + gl_LocalInvocationID.x;
+    int n_fragments = push_consts.n_fragments;
+    int stride_fragments = push_consts.stride_fragments;
+    if (fidx >= n_fragments){ 
+		return;
+    }
+    ivec2 cidx_t0 = intersection[fidx];
+    ivec2 cidx_t1 = (fidx + 1) != n_fragments?intersection[fidx + 1] : ivec2(-1, 0x3f800000);
+
+    float t0 = intBitsToFloat(cidx_t0.y & 0xFFFFFFFC);
+    float t1 = intBitsToFloat(cidx_t1.y & 0xFFFFFFFC);
+    t0 = MAX(t0, 0.0f);
+    t1 = MAX(t1, 0.0f);
+
+    int inte_flag0 = cidx_t0.y & 1;
+    int inte_flag1 = cidx_t1.y & 1;
+
+    int cidx = cidx_t0.x;
+    uint path_idx = curve_path_idx[cidx];
+    int yx = 0xFFFEFFFE;
+
+    if(cidx_t0.x != cidx_t1.x){
+        t1 = 1.0f;
+    }
+
+    int scan_winding_numer = 0;
+    int winding_number_change = 0;
+    if(t0 < t1){
+        uint ct_idx = (cidx >> 2);
+        uint ct_offset = (cidx % 4) << 3;
+        // little end: 
+        // offset           0   1   2   3
+        // value            01  02  04  08
+        // result 32-bit:   0x08040201
+        uint c_type = ((curve_type[ct_idx] >> ct_offset) & 0x000000FF);
+        uint curve_pos = curve_pos_map[cidx];
+        uint p0 = curve_pos;
+        
+        vec2 cv0, cv1, cv2, cv3;
+        switch(c_type){
+            case LINE:{
+                cv0 = transformed_pos[p0 + 0];
+                cv1 = transformed_pos[p0 + 1];
+                break;
+            }
+            case QUADRIC:{
+                cv0 = transformed_pos[p0 + 0];
+                cv1 = transformed_pos[p0 + 1];
+                cv2 = transformed_pos[p0 + 2];
+                break;
+            }
+            case CUBIC:{
+                cv0 = transformed_pos[p0 + 0];
+                cv1 = transformed_pos[p0 + 1];
+                cv2 = transformed_pos[p0 + 2];
+                cv3 = transformed_pos[p0 + 3];
+                break;
+            }
+            case ARC:{
+                // TODO
+                break;
+            }
+            default:break;
+        }
+
+        vec2 curve_p[2];
+        curve_p[0] = curve_interpolate(c_type, t0, cv0, cv1, cv2, cv3);
+        curve_p[1] = curve_interpolate(c_type, t1, cv0, cv1, cv2, cv3);
+
+        vec2 pf, pl; // first & last position
+        int sf, sl; // first & last side flags
+        pf = curve_p[0];
+        pl = curve_p[1];
+        sf = inte_flag0;
+        sl = inte_flag1;
+
+        int raw_frag_x = int((pf.x + pl.x) * 0.5f / 2) * 2;
+        int raw_frag_y = int((pf.y + pl.y) * 0.5f / 2) * 2;
+
+        int pos_x = MIN(MAX(raw_frag_x, -FRAG_SIZE), int((push_consts.width & 0xFFFFFFFE) + 2));
+        int pos_y = MIN(MAX(raw_frag_y, -FRAG_SIZE), int((push_consts.height & 0xFFFFFFFE) + 2));
+
+        int y_shift = ((pos_y + 0x7FFF) << 16);
+        int x_shift = ((pos_x + 0x7FFF) & 0xFFFF);
+
+        if(uint(raw_frag_y) < uint(push_consts.height)){
+            yx = y_shift | x_shift;
+        }
+        int wn_y = pos_y + 1;
+
+        scan_winding_numer = 0;
+        if(pf.y == pl.y){
+            scan_winding_numer = 0;
+        }else{
+            if(pf.y <= wn_y && wn_y < pl.y){
+                scan_winding_numer = -1;
+            }else if(pl.y <= wn_y && wn_y < pf.y){
+                scan_winding_numer = 1;
+            }
+        }
+
+        // TODO gen stencil mask
+    }
+
+    /*
+	output
+	----------------------------------------------------------------
+	| offset  | size  |
+	| sf * 0  | nf    | position
+	| sf * 1  | nf    | index
+	| sf * 2  | nf    | pathid
+	| sf * 3  | npath | sort segment
+	| sf * 4  | nf    | winding number
+	| sf * 5  | -     | -
+	| sf * 6  | -     | -
+	| sf * 7  | -     | -
+	| sf * 8  | -     | 
+	| sf * 9  | -     | -
+	| sf * 10 | -     | scan segment
+	*/
+    fragment_data[FD_POS(fidx)] = yx;
+    fragment_data[FD_SORT_INDEX(fidx)] = int(fidx);
+    fragment_data[FD_PATH_IDX(fidx)] = int(path_idx) | winding_number_change << 30;
+    fragment_data[FD_SCAN_WN(fidx)] = scan_winding_numer;
+
+    // sort segment
+    if(cidx_t0.x != cidx_t1.x){
+        uint path_idx1 = 0;
+        if(cidx_t1.x >= 0){
+            path_idx1 = curve_path_idx[cidx_t1.x];
+        }else{
+            path_idx1 = push_consts.n_paths;
+        }
+        for (uint j = path_idx + 1; j <= path_idx1; ++j) {
+			fragment_data[FD_SORT_SEGMENT(j)] = int(fidx + 1);
+		}
+    }
+
+    if(fidx == 0){
+        fragment_data[n_fragments] = -1;
+        for(int j = 0; j <= path_idx; ++j){
+            fragment_data[FD_SORT_SEGMENT(j)] = 0;
+        }
+    }
+
+}

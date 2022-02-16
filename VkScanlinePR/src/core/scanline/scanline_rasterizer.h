@@ -125,7 +125,8 @@ private:
         TransPosIn trans_pos_in;
         MakeInteIn make_inte_in;
 
-        int n_fragments;
+        int32_t n_fragments;
+        int32_t stride_fragments;
 
         struct {
             VULKAN_BUFFER_PTR(TransPosIn) k_trans_pos_ubo;
@@ -143,6 +144,8 @@ private:
         std::shared_ptr<ComputeKernal> transform_pos;
         std::shared_ptr<ComputeKernal> make_intersection_0;
         std::shared_ptr<ComputeKernal> make_intersection_1;
+
+        std::shared_ptr<ComputeKernal> gen_fragment;
     } _kernal;
 
 

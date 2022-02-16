@@ -31,7 +31,7 @@ layout(std140, binding = 0)uniform UBO{
 
 // ---------------------- buffer -------------------------
 layout(std430, binding = 1) buffer Intersection{
-    float intersection[];
+    ivec2 intersection[];
 };
 
 layout(std430, binding = 2) buffer CutPointCache{
@@ -386,11 +386,9 @@ void main(){
 				if (i_t_out == (i_inte_last & 0xFFFFFFFC)) {
 					i_inte_out = i_inte_out | i_inte_last;
 
-					intersection[(pcnt - 1) * 2 + 0] = uintBitsToFloat(cidx);
-                    intersection[(pcnt - 1) * 2 + 1] = intBitsToFloat(i_inte_out);
+					intersection[pcnt - 1] = ivec2(cidx, i_inte_out);
 				}
-				intersection[pcnt * 2 + 0] = uintBitsToFloat(cidx);
-                intersection[pcnt * 2 + 1] = intBitsToFloat(i_inte_out);
+                intersection[pcnt] = ivec2(cidx, i_inte_out);
 				i_inte_last = i_inte_out;
 				++pcnt;
 			}
