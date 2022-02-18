@@ -94,8 +94,8 @@ public:
         return this;
     }
 
-    ComputeKernal* cmdDispatch(uint32_t groupX) {
-        vkCmdDispatch(cmd_buffer, groupX, 1, 1);
+    ComputeKernal* cmdDispatch(uint32_t groupX, uint32_t groupY = 1) {
+        vkCmdDispatch(cmd_buffer, groupX, groupY, 1);
         return this;
     }
 

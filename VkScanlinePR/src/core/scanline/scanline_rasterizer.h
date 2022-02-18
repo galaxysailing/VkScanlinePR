@@ -142,11 +142,15 @@ private:
         std::shared_ptr<ComputeKernal> scan;
         std::shared_ptr<ComputeKernal> seg_sort;
 
-        // for scanline pr
+        // for scanline path rendering
         std::shared_ptr<ComputeKernal> transform_pos;
         std::shared_ptr<ComputeKernal> make_intersection_0;
         std::shared_ptr<ComputeKernal> make_intersection_1;
         std::shared_ptr<ComputeKernal> gen_fragment;
+        std::shared_ptr<ComputeKernal> shuffle_fragment;
+        std::shared_ptr<ComputeKernal> mark_merged_fragment_and_span;
+
+        std::shared_ptr<ComputeKernal> gen_merged_fragment_and_span;
     } _kernal;
 
 

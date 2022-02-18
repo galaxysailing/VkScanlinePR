@@ -14,9 +14,8 @@ enum class CurveType {
 	ARC = 0x13
 };
 enum class FillRule {
-	NONE = 0,
-	NON_ZERO = 1,
-	EVEN_ODD = 2
+	NON_ZERO = 0,
+	EVEN_ODD = 1
 };
 
 struct VGContainer {
@@ -50,7 +49,7 @@ public:
 	void newPath() {
 		++pathData.pathIndex;
 		pathData.curveIndices.push_back(curveData.curveIndex + 1);
-		pathData.fillRule.push_back(FillRule::NONE);
+		pathData.fillRule.push_back(FillRule::NON_ZERO);
 		pathData.fillColor.push_back(glm::vec4(0, 0, 0, 1));
 		pathData.fillOpacity.push_back(0.0f);
 

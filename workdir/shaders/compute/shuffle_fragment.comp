@@ -1,0 +1,27 @@
+#version 450
+
+#define BLOCK_SIZE 256
+#define FRAG_SIZE 2
+
+layout (local_size_x = BLOCK_SIZE) in;
+
+layout (push_constant) uniform PushConsts {
+    layout(offset = 0)int n_fragments;
+    layout(offset = 4)int stride_fragments;
+} push_consts;
+
+layout(std430, binding = 0) buffer FragmentData{
+    int fragment_data[];
+};
+
+void main(){
+    int thid = int(gl_WorkGroupID.x * BLOCK_SIZE + gl_LocalInvocationID.x);
+    if(thid >= push_consts.n_fragments){
+        return;
+    }
+    int stride_fragments = push_consts.stride_fragments;
+
+    int idx = fragment_data[thid + stride_fragments];
+    // scan winding number is from 4 to 3
+    fragment_data[thid + stride_fragments * 3] = fragment_data[idx + stride_fragments * 4];
+}

@@ -307,6 +307,9 @@ void ScanlineVGRasterizer::drawFrame()
     auto& k_make_inte_0 = *(_kernal.make_intersection_0);
     auto& k_make_inte_1 = *(_kernal.make_intersection_1);
     auto& k_gen_fragment = *(_kernal.gen_fragment);
+    auto& k_seg_sort = *(_kernal.seg_sort);
+    auto& k_shuffle_fragment = *(_kernal.shuffle_fragment);
+    auto& k_mark_merged_fragment_and_span = *(_kernal.mark_merged_fragment_and_span);
 
     static bool is_first_draw = true;
     std::vector<VkPipelineStageFlags> wait_dst_stage_masks = { VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT };
@@ -316,6 +319,7 @@ void ScanlineVGRasterizer::drawFrame()
     std::vector<VkSemaphore> signal_sema = {};
     VkSubmitInfo transpos_submit = k_transform_pos.submitInfo(is_first_draw, wait_sema, signal_sema, wait_dst_stage_masks.data());
     VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &transpos_submit, VK_NULL_HANDLE));
+    wait_compute = k_transform_pos.semaphore;
 
     is_first_draw = false;
 
@@ -326,6 +330,7 @@ void ScanlineVGRasterizer::drawFrame()
         , wait_dst_stage_masks.data()
     );
     VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &make_inte_0_submit, VK_NULL_HANDLE));
+    wait_compute = k_make_inte_0.semaphore;
 
     uint32_t n_curves = _compute.curve_input.n_curves;
     int32_t n_fragments = 0;
@@ -344,21 +349,19 @@ void ScanlineVGRasterizer::drawFrame()
             PUSH_SB_WRITE_DESC_SET(0, &csb_curve_pixel_count.desc.buf_info),
             PUSH_SB_WRITE_DESC_SET(1, &csb_curve_pixel_count.desc.buf_info)
         };
-        int i_offset = 0;
-        int o_offset = 0;
         k_scan.beginCmdBuffer(true)
             ->cmdPushDescSet(write_desc_sets)
             ->cmdPushConst(0, 4, &_compute.curve_input.n_curves)
-            ->cmdPushConst(4, 4, &i_offset)
-            ->cmdPushConst(8, 4, &o_offset)
             ->cmdDispatch(1)
             ->endCmdBuffer();
         VkSubmitInfo scan_submit = k_scan.submitInfo(is_first_draw
-            , wait_sema = { k_make_inte_0.semaphore }
+            , wait_sema = { wait_compute }
             , signal_sema = {}
             , wait_dst_stage_masks.data()
         );
         VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &scan_submit, VK_NULL_HANDLE));
+        wait_compute = k_scan.semaphore;
+
         VK_CHECK_RESULT(vkQueueWaitIdle(_compute.queue));
         n_fragments = csb_curve_pixel_count[n_curves];
     }
@@ -390,7 +393,7 @@ void ScanlineVGRasterizer::drawFrame()
 		->cmdDispatch(divup(_compute.curve_input.n_curves, BLOCK_SIZE))
 		->endCmdBuffer();
 	VkSubmitInfo make_inte_1_submit = k_make_inte_1.submitInfo(is_first_draw
-		, wait_sema = { k_scan.semaphore }
+		, wait_sema = { wait_compute }
 		, signal_sema = {}
 		, wait_dst_stage_masks.data()
 	);
@@ -417,14 +420,155 @@ void ScanlineVGRasterizer::drawFrame()
         ->cmdDispatch(divup(n_fragments, BLOCK_SIZE))
         ->endCmdBuffer();
     VkSubmitInfo gen_frag_submit = k_gen_fragment.submitInfo(is_first_draw
-        , wait_sema = { k_make_inte_1.semaphore }
+        , wait_sema = { wait_compute }
         , signal_sema = {}
         , wait_dst_stage_masks.data()
     );
     VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &gen_frag_submit, VK_NULL_HANDLE));
     wait_compute = k_gen_fragment.semaphore;
-
+    
     // seg sort
+    VkDescriptorBufferInfo key_desc, value_desc, seg_desc;
+    key_desc.offset = 0;
+    key_desc.buffer = _csb.fragment_data->buffer();
+    key_desc.range = n_fragments * sizeof(int32_t);
+
+    value_desc.offset = stride_fragments * sizeof(int32_t);
+    value_desc.buffer = _csb.fragment_data->buffer();
+    value_desc.range = n_fragments * sizeof(int32_t);
+
+    seg_desc.offset = 3 * stride_fragments * sizeof(int32_t);
+    seg_desc.buffer = _csb.fragment_data->buffer();
+    seg_desc.range = (_in_path.n_paths + 1) * sizeof(int32_t);
+
+    write_desc_sets = {
+        PUSH_SB_WRITE_DESC_SET(0, &key_desc),
+        PUSH_SB_WRITE_DESC_SET(1, &value_desc),
+        PUSH_SB_WRITE_DESC_SET(2, &seg_desc)
+    };
+    k_seg_sort.beginCmdBuffer(true)
+        ->cmdPushDescSet(write_desc_sets)
+        ->cmdPushConst(0, sizeof(int32_t), &n_fragments)
+        ->cmdPushConst(4, sizeof(int32_t), &_in_path.n_paths)
+        ->cmdDispatch(BLOCK_SIZE, divup(_in_path.n_paths, BLOCK_SIZE))
+        ->endCmdBuffer();
+    VkSubmitInfo seg_sort_submit = k_seg_sort.submitInfo(is_first_draw
+        , wait_sema = { wait_compute }
+        , signal_sema = {}
+        , wait_dst_stage_masks.data()
+    );
+    VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &seg_sort_submit, VK_NULL_HANDLE));
+    wait_compute = k_seg_sort.semaphore;
+
+    // shuffle fragment
+    write_desc_sets = {
+        PUSH_SB_WRITE_DESC_SET(0, &_csb.fragment_data->desc.buf_info)
+    };
+    k_shuffle_fragment.beginCmdBuffer(true)
+        ->cmdPushDescSet(write_desc_sets)
+        ->cmdPushConst(0, sizeof(int32_t), &n_fragments)
+        ->cmdPushConst(4, sizeof(int32_t), &stride_fragments)
+        ->cmdDispatch(divup(n_fragments, BLOCK_SIZE))
+        ->endCmdBuffer();
+    VkSubmitInfo shuffle_frag_submit = k_shuffle_fragment.submitInfo(is_first_draw
+        , wait_sema = { wait_compute }
+        , signal_sema = {}
+        , wait_dst_stage_masks.data()
+    );
+    VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &shuffle_frag_submit, VK_NULL_HANDLE));
+    wait_compute = k_shuffle_fragment.semaphore;
+
+    // exclusive scan
+    {
+        VkDescriptorBufferInfo desc;
+        desc.offset = 3 * stride_fragments * sizeof(int32_t);
+        desc.buffer = _csb.fragment_data->buffer();
+        desc.range = n_fragments * sizeof(int32_t);
+        write_desc_sets = {
+            PUSH_SB_WRITE_DESC_SET(0, &desc),
+            PUSH_SB_WRITE_DESC_SET(1, &desc)
+        };
+        k_scan.beginCmdBuffer(true)
+            ->cmdPushDescSet(write_desc_sets)
+            ->cmdPushConst(0, 4, &n_fragments)
+            ->cmdDispatch(1)
+            ->endCmdBuffer();
+        VkSubmitInfo scan_submit = k_scan.submitInfo(is_first_draw
+            , wait_sema = { wait_compute }
+            , signal_sema = {}
+            , wait_dst_stage_masks.data()
+        );
+        VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &scan_submit, VK_NULL_HANDLE));
+        wait_compute = k_scan.semaphore;
+        VK_CHECK_RESULT(vkQueueWaitIdle(_compute.queue));
+    }
+
+    // mark_merged_fragment_and_span
+    write_desc_sets = {
+        PUSH_SB_WRITE_DESC_SET(0, &_in_path.fill_rule->desc.buf_info),
+        PUSH_SB_WRITE_DESC_SET(1, &_csb.fragment_data->desc.buf_info)
+    };
+    k_mark_merged_fragment_and_span.beginCmdBuffer(true)
+        ->cmdPushDescSet(write_desc_sets)
+        ->cmdPushConst(0, sizeof(int32_t), &n_fragments)
+        ->cmdPushConst(4, sizeof(int32_t), &stride_fragments)
+        ->cmdPushConst(8, sizeof(int32_t), &_width)
+        ->cmdPushConst(12, sizeof(int32_t), &_height)
+        ->cmdDispatch(divup(n_fragments, BLOCK_SIZE))
+        ->endCmdBuffer();
+    VkSubmitInfo mark_merge_submit = k_mark_merged_fragment_and_span.submitInfo(is_first_draw
+        , wait_sema = { wait_compute }
+        , signal_sema = {}
+        , wait_dst_stage_masks.data()
+    );
+    VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &mark_merge_submit, VK_NULL_HANDLE));
+
+    wait_compute = k_mark_merged_fragment_and_span.semaphore;
+    /*
+    ----------------------------------------------------------------
+    | offset  | size  |
+    | sf * 0  | nf    | position (sorted)
+    | sf * 1  | nf    | index (sorted)
+    | sf * 2  | nf    | pathid & winding_number_change
+    | sf * 3  | nf    | winding number (sorted & scaned)
+    | sf * 4  | 2*nf  | merged fragment flag, span flag
+    | sf * 5  | *     |
+    | sf * 6  | -     | -
+    | sf * 7  | -     | -
+    */
+
+    // exclusive scan
+    {
+        VkDescriptorBufferInfo input_desc, output_desc;
+        input_desc.offset = 4 * stride_fragments * sizeof(int32_t);
+        input_desc.buffer = _csb.fragment_data->buffer();
+        input_desc.range = 2 * n_fragments * sizeof(int32_t);
+
+        output_desc.offset = 6 * stride_fragments * sizeof(int32_t);
+        output_desc.buffer = input_desc.buffer;
+        output_desc.range = input_desc.range;
+
+        write_desc_sets = {
+            PUSH_SB_WRITE_DESC_SET(0, &input_desc),
+            PUSH_SB_WRITE_DESC_SET(1, &output_desc)
+        };
+        int n = n_fragments * 2;
+        k_scan.beginCmdBuffer(true)
+            ->cmdPushDescSet(write_desc_sets)
+            ->cmdPushConst(0, 4, &n)
+            ->cmdDispatch(1)
+            ->endCmdBuffer();
+        VkSubmitInfo scan_submit = k_scan.submitInfo(is_first_draw
+            , wait_sema = { wait_compute }
+            , signal_sema = {}
+            , wait_dst_stage_masks.data()
+        );
+        VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &scan_submit, VK_NULL_HANDLE));
+        wait_compute = k_scan.semaphore;
+        VK_CHECK_RESULT(vkQueueWaitIdle(_compute.queue));
+    }
+
+
 
 
     // Submit graphics commands
@@ -458,6 +602,19 @@ void ScanlineVGRasterizer::drawFrame()
 
 void ScanlineVGRasterizer::drawDebug()
 {
+    auto save_data = [&](const std::string& kv_file) {
+        std::ofstream fin;
+        fin.open(kv_file);
+        if (!fin.is_open()) {
+            std::runtime_error(kv_file + " open failed");
+        }
+        int* ptr = _compute.storage_buffers.fragment_data->cptr();
+        for (int i = 0; i <= _compute.n_fragments; ++i) {
+            //printf("%d,%d\n", ptr[0 * _compute.stride_fragments + i], ptr[_compute.stride_fragments + i]);
+            fin << ptr[i] << "," << ptr[_compute.stride_fragments + i] << "\n";
+        }
+        fin.close();
+    };
     // for point debug
     //vec2* ptr = _compute.storage_buffers.transformed_pos->cptr();
     //printf("-------------------- begin --------------------\n");
@@ -474,21 +631,27 @@ void ScanlineVGRasterizer::drawDebug()
     //    //printf("%f, %f\n", ptr->x, ptr->y);
     //}
     //printf("-------------------- end --------------------\n");
-    //int* ptr = _compute.storage_buffers.fragment_data->cptr();
-    //printf("-------------------- begin --------------------\n");
-    //for (int i = 0; i <= _compute.path_input.n_paths; ++i) {
-    //    printf("%d: %d\n", i, ptr[3 * _compute.stride_fragments + i]);
-    //}
-    //printf("-------------------- end --------------------\n");
 
-    // for curve debug
-    int32_t* ptr = _compute.storage_buffers.curve_pixel_count->cptr();
     printf("-------------------- begin --------------------\n");
-    for (int i = 0; i <= _compute.curve_input.n_curves; ++i) {
-        printf("%d\n", ptr[i]);
-        //printf("%f, %f\n", ptr->x, ptr->y);
+    int* ptr = _compute.storage_buffers.fragment_data->cptr();
+    for (int i = 0; i <= _compute.n_fragments; ++i) {
+        //printf("%d,%d\n", ptr[0 * _compute.stride_fragments + i], ptr[_compute.stride_fragments + i]);
+        //std::cout << ptr[i] << "," << ptr[_compute.stride_fragments + i] << "\n";
+        std::cout << i << ": " << ptr[_compute.stride_fragments * 4 + i] << "\n";
     }
     printf("-------------------- end --------------------\n");
+
+    //save_data("kv_out.txt");
+
+
+    // for curve debug
+    //int32_t* ptr = _compute.storage_buffers.curve_pixel_count->cptr();
+    //printf("-------------------- begin --------------------\n");
+    //for (int i = 0; i <= _compute.curve_input.n_curves; ++i) {
+    //    printf("%d\n", ptr[i]);
+    //    //printf("%f, %f\n", ptr->x, ptr->y);
+    //}
+    //printf("-------------------- end --------------------\n");
 
     // for fragments
     //int* ptr = _compute.storage_buffers.fragment_data->cptr();
@@ -773,7 +936,7 @@ void ScanlineVGRasterizer::prepareCompute()
     //_k.make_intersection_1->buildCmdBuffer(divup(_compute.curve_input.n_curves, BLOCK_SIZE), wds_make_int_1);
     
     // generate fragments
-    std::vector<VkDescriptorType> dt_gen_fragment{
+    std::vector<VkDescriptorType> dt_gen_frag{
         DESC_TYPE_SB,DESC_TYPE_SB,
         DESC_TYPE_SB,DESC_TYPE_SB,
         DESC_TYPE_SB,DESC_TYPE_SB
@@ -781,7 +944,29 @@ void ScanlineVGRasterizer::prepareCompute()
     std::vector<VkPushConstantRange> gen_frag_pcr{
         vk::initializer::pushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, sizeof(int32_t) * 6, 0)
     };
-    _k.gen_fragment = COMPUTE_KERNAL(dt_gen_fragment, COMPUTE_SPV_DIR + "gen_fragment.comp.spv", &gen_frag_pcr);
+    _k.gen_fragment = COMPUTE_KERNAL(dt_gen_frag, COMPUTE_SPV_DIR + "gen_fragment.comp.spv", &gen_frag_pcr);
+
+    // shuffle fragment
+    std::vector<VkDescriptorType> dt_shuffle_frag{
+        DESC_TYPE_SB,DESC_TYPE_SB,
+    };
+    std::vector<VkPushConstantRange> shuffle_frag_pcr{
+        vk::initializer::pushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, sizeof(int32_t) * 2, 0)
+    };
+    _k.shuffle_fragment = COMPUTE_KERNAL(dt_shuffle_frag, COMPUTE_SPV_DIR + "shuffle_fragment.comp.spv", &shuffle_frag_pcr);
+
+    // mark merged fragment and span
+    std::vector<VkDescriptorType> dt_mark_merge{
+        DESC_TYPE_SB,DESC_TYPE_SB,
+        DESC_TYPE_SB,DESC_TYPE_SB
+    };
+    std::vector<VkPushConstantRange> mark_merge_pcr{
+        vk::initializer::pushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, sizeof(int32_t) * 4, 0)
+    };
+    _k.mark_merged_fragment_and_span = COMPUTE_KERNAL(dt_mark_merge, COMPUTE_SPV_DIR + "mark_merged_fragment_and_span.comp.spv", &mark_merge_pcr);
+
+    //gen_merged_fragment_and_span
+    _k.gen_merged_fragment_and_span = COMPUTE_KERNAL(dt_mark_merge, COMPUTE_SPV_DIR + "gen_merged_fragment_and_span.comp.spv", &mark_merge_pcr);
 
 }
 
@@ -898,14 +1083,27 @@ void ScanlineVGRasterizer::prepareComputeBuffers()
 void ScanlineVGRasterizer::prepareCommonComputeKernal()
 {
     auto& _k = _kernal;
+
+    // scan
     std::vector<VkDescriptorType> scan_dt{
-        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+        DESC_TYPE_SB,
+        DESC_TYPE_SB
     };
     std::vector<VkPushConstantRange> scan_pcr{
-        vk::initializer::pushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, sizeof(int32_t) * 3, 0)
+        vk::initializer::pushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, sizeof(int32_t), 0)
     };
     _k.scan = COMPUTE_KERNAL(scan_dt, COMMON_COMPUTE_SPV_DIR + "naive_scan.comp.spv", &scan_pcr);
+
+    // seg_sort
+    std::vector<VkDescriptorType> seg_sort_dt{
+        DESC_TYPE_SB,
+        DESC_TYPE_SB,
+        DESC_TYPE_SB
+    };
+    std::vector<VkPushConstantRange> seg_sort_pcr{
+        vk::initializer::pushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, sizeof(int32_t) * 2, 0)
+    };
+    _k.seg_sort = COMPUTE_KERNAL(seg_sort_dt, COMMON_COMPUTE_SPV_DIR + "naive_seg_sort_pairs.comp.spv", &seg_sort_pcr);
 
 }
 

@@ -1,0 +1,96 @@
+#version 450
+
+#define BLOCK_SIZE 256
+#define FRAG_SIZE 2
+
+layout (local_size_x = BLOCK_SIZE) in;
+
+layout (push_constant) uniform PushConsts {
+    layout(offset = 0)int n_fragments;
+    layout(offset = 4)int stride_fragments;
+    layout(offset = 8)int width;
+    layout(offset = 12)int height;
+} push_consts;
+
+layout (std430, binding = 0) buffer PathFillRule{
+    uint path_fill_rule[];
+};
+layout (std430, binding = 1) buffer FragmentData{
+    int fragment_data[];
+};
+
+void main(){
+    uint fidx = gl_WorkGroupID.x * BLOCK_SIZE + gl_LocalInvocationID.x;
+    int n_fragments = push_consts.n_fragments;
+    if(fidx >= n_fragments){
+        return;
+    }
+    int width = push_consts.width, height = push_consts.height;
+    int stride_fragments = push_consts.stride_fragments;
+
+// #define TEST
+#ifdef TEST
+    fragment_data[4 * stride_fragments + fidx] = int(fidx);
+    return;
+#endif
+
+
+    int path_frag_flag = 0;
+	int span_flag = 0;
+    int yx_1 = fragment_data[fidx];
+    int x1 = (yx_1 & 0xFFFF) - 0x7FFF;
+    int y1 = ((yx_1 >> 16) & 0xFFFF) - 0x7FFF;
+
+    if(fidx == 0){
+        if (x1 < 0 || y1 < 0 || x1 >= width || y1 >= height) {
+			path_frag_flag = 0;
+		}
+		else {
+			path_frag_flag = 1;
+		}
+		span_flag = 0;
+    } else {
+		int pidx_0 = fragment_data[2 * stride_fragments + fidx - 1] & 0x3FFFFFFF;
+		int pidx_1 = fragment_data[2 * stride_fragments + fidx] & 0x3FFFFFFF;
+
+		// 0: FT_NONE
+		// 1: FT_COLOR
+		// 4: FT_GRADIENT
+		uint pfr_idx = (pidx_1 >> 2);
+        uint pfr_offset = (pidx_1 % 4) << 3;
+        // little end: 
+        // offset           0   1   2   3
+        // value            01  02  04  08
+        // result 32-bit:   0x08040201
+        uint fill_rule = ((path_fill_rule[pfr_idx] >> pfr_offset) & 0x000000FF);
+
+		int yx_0 = fragment_data[fidx - 1];
+        int x0 = (yx_0 & 0xFFFF) - 0x7FFF;
+        int y0 = ((yx_0 >> 16) & 0xFFFF) - 0x7FFF;
+
+		if (x1 < 0 || y1 < 0 || x1 >= width || y1 >= height) {
+			path_frag_flag = 0;
+		}
+		else if (pidx_0 != pidx_1 || yx_0 != yx_1) {
+			path_frag_flag = 1;
+		}
+		else {
+			path_frag_flag = 0;
+		}
+
+		int wn = fragment_data[3 * stride_fragments + fidx];
+
+		// span begin(1 or -1) is always added to span end. so winding number is not *zero*.
+		bool wn_flag = (((fill_rule == 0) && (wn != 0)) || ((fill_rule == 1) && ((wn & 1) == 1)));
+		
+		if (y0 == y1 && ((x0 + FRAG_SIZE) < x1) && pidx_0 == pidx_1 && wn_flag) {
+			span_flag = 1;
+		}
+		else {
+			span_flag = 0;
+		}
+    }
+
+    fragment_data[4 * stride_fragments + fidx] = path_frag_flag;
+    fragment_data[4 * stride_fragments + n_fragments + fidx] = span_flag;
+}
