@@ -1,5 +1,101 @@
 #version 450
 
+#define BLOCK_SIZE 256
+#define FRAG_SIZE 2
+
+layout (local_size_x = BLOCK_SIZE) in;
+
+layout (push_constant) uniform PushConsts {
+    layout(offset = 0)int n_fragments;
+    layout(offset = 4)int stride_fragments;
+    layout(offset = 8)int width;
+    layout(offset = 12)int height;
+    layout(offset = 16)int n_output_fragments;
+    layout(offset = 20)int n_spans;
+} push_consts;
+
+layout (std430, binding = 0) buffer FragmentData{
+    int fragment_data[];
+};
+
+layout (std430, binding = 1) buffer PathFillInfo{
+    int path_fill_info[];
+};
+
+// output buffer
+layout (std430, binding = 2) buffer OutputBuffer{
+    ivec4 output_buf[];
+};
+
 void main(){
-    
+    int fidx = int(gl_WorkGroupID.x * BLOCK_SIZE + gl_LocalInvocationID.x);
+    int n_fragments = push_consts.n_fragments;
+// #define TEST
+#ifdef TEST
+    output_buf[fidx] = ivec4(fidx,0,0,0);
+    return;
+#endif
+    if(fidx >= n_fragments){
+        return;
+    }
+
+    int width = push_consts.width, height = push_consts.height;
+    int stride_fragments = push_consts.stride_fragments;
+    int n_output_fragments = push_consts.n_output_fragments, n_spans = push_consts.n_spans;
+
+    int frag_flag = fragment_data[fidx + stride_fragments * 4];
+	int frag_index = fragment_data[fidx + stride_fragments * 6];
+
+	int span_flag = fragment_data[fidx + stride_fragments * 4 + n_fragments];
+	int span_index = fragment_data[fidx + stride_fragments * 6 + n_fragments] - n_output_fragments;
+
+	// check
+	//
+	// f-flag: 0 1 0 1 0 0 0
+	// s-flag: 0 0 0 1 0 1 0
+	//
+	// f-pos:  0 1 1 2 2 2 2 
+	// s-pos:  0 0 0 1 1 2 2
+	int num_of_frag_before = frag_index - frag_flag;
+	int num_of_span_before = span_index - span_flag;
+
+	if (frag_flag == 1) {
+		int output_index = num_of_frag_before + num_of_span_before;
+
+		int raw_pos = fragment_data[fidx];
+		int rc_x = (raw_pos & 0xFFFF) - 0x7FFF;
+		int rc_y = ((raw_pos >> 16) & 0xFFFF ) - 0x7FFF;
+
+		int pidx = fragment_data[fidx + stride_fragments * 2] & 0x3FFFFFFF;
+		int fill_info = path_fill_info[pidx]; // path fill info
+
+		int pos_yx = ((rc_y) << 16) | rc_x;
+
+		output_buf[output_index] = ivec4(pos_yx, 2, fill_info, frag_index);
+		
+	}
+	if (span_flag == 1) {
+
+		int output_index = num_of_frag_before + num_of_span_before + frag_flag;
+
+		int p0 = fragment_data[fidx - 1];
+		int p1 = fragment_data[fidx];
+
+		int pidx = fragment_data[fidx + stride_fragments * 2] & 0x3FFFFFFF;
+
+		int y0 = ((p0 >> 16) & 0xFFFF) - 0x7FFF;
+
+		int x0 = (p0 & 0xFFFF) - 0x7FFF + FRAG_SIZE;
+		int x1 = (p1 & 0xFFFF) - 0x7FFF;
+		x0 = max(0, x0);
+
+		// output:
+		//   int2 | pos (x,y)
+		//   uint32 | width
+		//   uint32 | rgba or gradient
+
+		int fill_info = path_fill_info[pidx];
+		output_buf[output_index] = ivec4((y0 << 16) | x0, x1 - x0, fill_info, 0);
+		
+	}
 }

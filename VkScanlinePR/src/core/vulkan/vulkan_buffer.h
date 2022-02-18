@@ -42,7 +42,7 @@ namespace vulkan {
 					, _capacity, &_buffer, &_memory));
 			}
 			_size = new_size;
-			setupDescriptor();
+			setupBufInfo();
 		}
 
 		void set(T& data, uint32_t len) {
@@ -67,7 +67,7 @@ namespace vulkan {
 					createWithoutStagingCopy(&data, buf_size);
 				}
 			}
-			setupDescriptor();
+			setupBufInfo();
 		}
 
 		// set 
@@ -92,7 +92,7 @@ namespace vulkan {
 					createWithoutStagingCopy(data.data(), buf_size);
 				}
 			}
-			setupDescriptor();
+			setupBufInfo();
 		}
 
 		void clear() {
@@ -169,15 +169,56 @@ namespace vulkan {
 			return res;
 		}
 
+		std::vector<T> get_list(uint32_t index, uint32_t size) {
+			VkCommandBuffer copy_cmd = _device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+			VkBufferCopy copy_region = {};
+			copy_region.size = static_cast<VkDeviceSize>(sizeof(T) * size);
+			copy_region.srcOffset = static_cast<VkDeviceSize>(index * sizeof(T));
+
+			VkBuffer buf = VK_NULL_HANDLE;
+			VkDeviceMemory memory = VK_NULL_HANDLE;
+
+			VK_CHECK_RESULT(_device->createBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT
+				, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+				, copy_region.size, &buf, &memory));
+			vkCmdCopyBuffer(copy_cmd, _buffer, buf, 1, &copy_region);
+			void* pdata;
+			vkMapMemory(_device->logicalDevice, memory, 0, copy_region.size, 0, &pdata);
+			_device->flushCommandBuffer(copy_cmd, _queue, true);
+			std::vector<T> res;
+			res.reverse(size);
+			for (int i = 0; i < size; ++i) {
+				res.push_back(((T*)pdata)[i]);
+			}
+
+			// destroy
+			vkDestroyBuffer(_device->logicalDevice, buf, nullptr);
+			vkFreeMemory(_device->logicalDevice, memory, nullptr);
+			return res;
+		}
+
 		VkBuffer buffer() {
 			return _buffer;
 		}
 
+		int size() {
+			return _size / sizeof(T);
+		}
+
+		void setupBufferView(VkFormat format, VkDeviceSize range) {
+			desc.buf_view = {};
+			desc.buf_view.sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO;
+			desc.buf_view.buffer = _buffer;
+			desc.buf_view.format = format;
+			desc.buf_view.range = range;
+			desc.buf_view.flags = 0;
+		}
 
 
 	public:
-		union {
+		struct {
 			VkDescriptorBufferInfo buf_info;
+			VkBufferViewCreateInfo buf_view;
 		} desc;
 
 	private:
@@ -246,7 +287,7 @@ namespace vulkan {
 			_device->flushCommandBuffer(copy_cmd, _queue, true);
 		}
 
-		void setupDescriptor() {
+		void setupBufInfo() {
 			desc.buf_info.offset = 0;
 			desc.buf_info.buffer = _buffer;
 			desc.buf_info.range = _size;
@@ -260,6 +301,7 @@ namespace vulkan {
 			VkDeviceMemory memory = VK_NULL_HANDLE;
 		} _host_data;
 		std::shared_ptr<vk::VulkanDevice> _device;
+
 		VkBuffer _buffer = VK_NULL_HANDLE;
 		VkDeviceMemory _memory = VK_NULL_HANDLE;
 		VkDeviceSize _size = 0;

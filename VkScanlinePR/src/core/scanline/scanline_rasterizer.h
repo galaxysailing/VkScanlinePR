@@ -82,6 +82,7 @@ private:
 
     //std::shared_ptr<VGContainer> _vgContainer;
     std::vector<glm::ivec4> outputIndex;
+    PFN_vkCmdPushDescriptorSetKHR _vkCmdPushDescriptorSetKHR;
 
     struct {
         vk::TexelBuffer outputIndexBuffer;
@@ -90,14 +91,17 @@ private:
         VkDescriptorSet descriptorSet;
         VkPipelineLayout pipelineLayout;
 
+        VkRenderPassBeginInfo renderPassBeginInfo;
         struct {
             VkPipeline scanline;
         }pipelines;
+
+        VULKAN_BUFFER_PTR(ivec4) output_buf;
+        VkBufferView output_buf_view;
         
     } graphics;
 
     struct {
-        PFN_vkCmdPushDescriptorSetKHR vkCmdPushDescriptorSetKHR;
 
         VkVGInputCurveData curve_input;
         VkVGInputPathData path_input;
@@ -127,6 +131,9 @@ private:
 
         int32_t n_fragments;
         int32_t stride_fragments;
+        int32_t merged_fragment;
+        int32_t span;
+
 
         struct {
             VULKAN_BUFFER_PTR(TransPosIn) k_trans_pos_ubo;
