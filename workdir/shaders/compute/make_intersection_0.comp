@@ -7,6 +7,7 @@ layout (local_size_x = BLOCK_SIZE) in;
 #define SHARED_MAP(i) (shared_index + (i) * BLOCK_SIZE)
 #define CUT_POINT_MAP(i) (5 * i)
 #define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
+// #define LERP(a, b, t) ((a) + (t)*((b)-(a)))
 #define MAX(a, b) (((a)>(b))?(a):(b))
 #define MIN(a, b) (((a)<(b))?(a):(b))
 #define CLAMP(v, mi, ma) (MIN(ma, MAX(v, mi))) 
@@ -78,10 +79,11 @@ void solveQuadEquation(float a, float b, float c, out float r0, out float r1){
     if(delta < 0.0f){
         r0 = r1 = 0.0f;
         return;
-    }else if(delta == 0.0f){
-        r0 = r1 = -b / (2.0f * a);
-        return;
     }
+    // else if(delta == 0.0f){
+    //     r0 = r1 = -b / (2.0f * a);
+    //     return;
+    // }
 
     float s_delta = sqrt(delta);
 
@@ -147,11 +149,11 @@ void get_xy_begin_end(vec2 p0, vec2 p1, out int xbegin, out int xend, out int yb
 // 'out' key word will let variable become 0
 void udpate_cut_range(int w, int h, int xbegin, int xend, int ybegin, int yend, out int cut_n_x, out int cut_n_y){
     int cut_x_min = 0;
-	// int cut_x_max = (w & 0xFFFFFFFE) + FRAG_SIZE;
-    int cut_x_max = w + FRAG_SIZE;
+	int cut_x_max = (w & 0xFFFFFFFE) + FRAG_SIZE;
+    // int cut_x_max = w + FRAG_SIZE;
 	int cut_y_min = 0;
-	// int cut_y_max = (h & 0xFFFFFFFE) + FRAG_SIZE;
-    int cut_y_max = h + FRAG_SIZE;
+	int cut_y_max = (h & 0xFFFFFFFE) + FRAG_SIZE;
+    // int cut_y_max = h + FRAG_SIZE;
 	// width, height: 1200, 1024
 	// cut_x_max, cut_y_max: 1202, 1026
 
@@ -163,10 +165,10 @@ void udpate_cut_range(int w, int h, int xbegin, int xend, int ybegin, int yend, 
 	}
 	else {
         
-		xbegin = CLAMP(xbegin, cut_x_min, cut_x_max);
-		xend = CLAMP(xend, cut_x_min, cut_x_max);
+		xbegin = clamp(xbegin, cut_x_min, cut_x_max);
+		xend = clamp(xend, cut_x_min, cut_x_max);
 
-		cut_n_x = MAX((xend - xbegin) / FRAG_SIZE + 1, 0);
+		cut_n_x = max((xend - xbegin) / FRAG_SIZE + 1, 0);
 	}
 
 	if ((ybegin < cut_y_min && yend < cut_y_min) 
@@ -177,10 +179,10 @@ void udpate_cut_range(int w, int h, int xbegin, int xend, int ybegin, int yend, 
 	}
 	else {
         
-		ybegin = CLAMP(ybegin, cut_y_min, cut_y_max);
-		yend = CLAMP(yend, cut_y_min, cut_y_max);
+		ybegin = clamp(ybegin, cut_y_min, cut_y_max);
+		yend = clamp(yend, cut_y_min, cut_y_max);
 
-		cut_n_y = MAX((yend - ybegin) / FRAG_SIZE + 1, 0);
+		cut_n_y = max((yend - ybegin) / FRAG_SIZE + 1, 0);
 	}
 }
 
@@ -229,6 +231,7 @@ void main() {
                     break;
                 }
                 case QUADRIC:{
+                    // TODO
                     break;
                 }
                 case CUBIC:{
@@ -257,7 +260,7 @@ void main() {
                     break;
                 }
                 case ARC:{
-
+                    // TODO
                     break;
                 }
                 default:break;
@@ -330,7 +333,7 @@ void main() {
 
 	if (is_visible) { 
         _shared.t1_queue[SHARED_MAP(n_cuts)] = 1.f;
-        n_cuts++;
+        ++n_cuts;
     }
 
     // pixel count 

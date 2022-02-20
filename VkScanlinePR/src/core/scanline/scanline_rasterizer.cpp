@@ -333,6 +333,8 @@ void ScanlineVGRasterizer::drawFrame()
     VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &make_inte_0_submit, VK_NULL_HANDLE));
     wait_compute = k_make_inte_0.semaphore;
 
+    drawDebug();
+
     uint32_t n_curves = _compute.curve_input.n_curves;
     int32_t n_fragments = 0;
 
@@ -367,6 +369,8 @@ void ScanlineVGRasterizer::drawFrame()
         n_fragments = csb_curve_pixel_count[n_curves];
     }
     _c.n_fragments = n_fragments;
+    
+    drawDebug();
 
     // make intersection 1
     int32_t stride_fragments = (n_fragments + 256) & -256;
@@ -678,8 +682,6 @@ void ScanlineVGRasterizer::drawFrame()
     submitInfo.pCommandBuffers = &_drawCmdBuffers[_currentBuffer];
     VK_CHECK_RESULT(vkQueueSubmit(_presentQueue, 1, &submitInfo, VK_NULL_HANDLE));
     _Base::submitFrame();
-
-    //drawDebug();
     
 }
 
@@ -728,13 +730,14 @@ void ScanlineVGRasterizer::drawDebug()
 
 
     // for curve debug
-    //int32_t* ptr = _compute.storage_buffers.curve_pixel_count->cptr();
-    //printf("-------------------- begin --------------------\n");
-    //for (int i = 0; i <= _compute.curve_input.n_curves; ++i) {
-    //    printf("%d\n", ptr[i]);
-    //    //printf("%f, %f\n", ptr->x, ptr->y);
-    //}
-    //printf("-------------------- end --------------------\n");
+    int32_t* ptr = _compute.storage_buffers.curve_pixel_count->cptr();
+    printf("-------------------- begin --------------------\n");
+    for (int i = 0; i <= _compute.curve_input.n_curves; ++i) {
+        printf("%d\n", ptr[i]);
+        //printf("%f, %f\n", ptr->x, ptr->y);
+    }
+    printf("-------------------- end --------------------\n");
+    _compute.storage_buffers.curve_pixel_count->cptr_clear();
 
     // for fragments
     //int* ptr = _compute.storage_buffers.fragment_data->cptr();
@@ -1184,15 +1187,15 @@ void ScanlineVGRasterizer::prepareComputeBuffers()
     _c.trans_pos_in.n_points = _in_curve.n_points;
     _c.trans_pos_in.w = _width;
     _c.trans_pos_in.h = _height;
-    //_c.trans_pos_in.m0 = vec4(1.03434348, 0, 0, 204.363617);
-    //_c.trans_pos_in.m1 = vec4(0, 1.03434348, 0, 0);
-    //_c.trans_pos_in.m2 = vec4(0, 0, 1, 0);
-    //_c.trans_pos_in.m3 = vec4(0, 0, 0, 1);
-
-    _c.trans_pos_in.m0 = vec4(38.3, 0, 0, -2470);
-    _c.trans_pos_in.m1 = vec4(0, 38.3, 0, -34331);
+    _c.trans_pos_in.m0 = vec4(1.03434348, 0, 0, 204.363617);
+    _c.trans_pos_in.m1 = vec4(0, 1.03434348, 0, 0);
     _c.trans_pos_in.m2 = vec4(0, 0, 1, 0);
     _c.trans_pos_in.m3 = vec4(0, 0, 0, 1);
+
+    //_c.trans_pos_in.m0 = vec4(38.851223, 0, 0, -2544.642822);
+    //_c.trans_pos_in.m1 = vec4(0, 38.851223, 0, -34850.464844);
+    //_c.trans_pos_in.m2 = vec4(0, 0, 1, 0);
+    //_c.trans_pos_in.m3 = vec4(0, 0, 0, 1);
 
     _c.make_inte_in.w = _width;
     _c.make_inte_in.h = _height;

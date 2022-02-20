@@ -358,7 +358,7 @@ void main(){
 				t_min = next_tx;
 				side = 0;
 				if (n_x > 0) {
-					n_x--;
+					--n_x;
 					c = x; x += dx;
 				}
 				else {
@@ -369,7 +369,7 @@ void main(){
 				t_min = next_ty;
 				side = 1;
 				if (n_y > 0) {
-					n_y--;
+					--n_y;
 					c = y; y += dy;
 				}
 				else {
@@ -399,7 +399,8 @@ void main(){
 					float x0 = _shared.point_coords[SHARED_MAP(side * 4 + 0)];
 					float x1 = _shared.point_coords[SHARED_MAP(side * 4 + 1)];
                     float a = x1 - x0;
-					t_solve = MIN(MAX((c - x0)*(a != 0.0f?(1.0f / a):0.0f), t_min), t1_ms);
+                    a = (a != 0.0f ? (1.0f / a) : 0.0f);
+					t_solve = MIN(MAX((c - x0) * a, t_min), t1_ms);
 				}
 				else if (c_type == QUADRIC) {
                     // TODO

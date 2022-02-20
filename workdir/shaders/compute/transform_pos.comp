@@ -79,6 +79,5 @@ void main() {
     }
     
     // transformed pos
-    transformed_pos[poi].x = op.x;
-    transformed_pos[poi].y = op.y;
+    transformed_pos[poi] = vec2(op.x, op.y);
 }

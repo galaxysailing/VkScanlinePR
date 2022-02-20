@@ -3,6 +3,9 @@
 #define BLOCK_SIZE 256
 #define FRAG_SIZE 2
 
+#define MAX(a, b) (((a)>(b))?(a):(b))
+#define MIN(a, b) (((a)<(b))?(a):(b))
+
 layout (local_size_x = BLOCK_SIZE) in;
 
 layout (push_constant) uniform PushConsts {
@@ -59,43 +62,42 @@ void main(){
 	int num_of_frag_before = frag_index - frag_flag;
 	int num_of_span_before = span_index - span_flag;
 
-	if (frag_flag == 1) {
+	if (frag_flag != 0) {
 		int output_index = num_of_frag_before + num_of_span_before;
 
 		int raw_pos = fragment_data[fidx];
 		int rc_x = (raw_pos & 0xFFFF) - 0x7FFF;
-		int rc_y = ((raw_pos >> 16) & 0xFFFF ) - 0x7FFF;
+		int rc_y = ((raw_pos >> 16) & 0xFFFF) - 0x7FFF;
 
 		int pidx = fragment_data[fidx + stride_fragments * 2] & 0x3FFFFFFF;
 		int fill_info = path_fill_info[pidx]; // path fill info
 
-		int pos_yx = ((rc_y) << 16) | rc_x;
+		int pos_yx = (rc_y << 16) | rc_x;
 
 		output_buf[output_index] = ivec4(pos_yx, 2, fill_info, frag_index);
 		
 	}
-	if (span_flag == 1) {
+	// if (span_flag != 0) {
 
-		int output_index = num_of_frag_before + num_of_span_before + frag_flag;
+	// 	int output_index = num_of_frag_before + num_of_span_before + frag_flag;
 
-		int p0 = fragment_data[fidx - 1];
-		int p1 = fragment_data[fidx];
+	// 	int p0 = fragment_data[fidx - 1];
+	// 	int p1 = fragment_data[fidx];
 
-		int pidx = fragment_data[fidx + stride_fragments * 2] & 0x3FFFFFFF;
+	// 	int pidx = fragment_data[fidx + stride_fragments * 2] & 0x3FFFFFFF;
 
-		int y0 = ((p0 >> 16) & 0xFFFF) - 0x7FFF;
+	// 	int y0 = ((p0 >> 16) & 0xFFFF) - 0x7FFF;
 
-		int x0 = (p0 & 0xFFFF) - 0x7FFF + FRAG_SIZE;
-		int x1 = (p1 & 0xFFFF) - 0x7FFF;
-		x0 = max(0, x0);
+	// 	int x0 = (p0 & 0xFFFF) - 0x7FFF + FRAG_SIZE;
+	// 	int x1 = (p1 & 0xFFFF) - 0x7FFF;
+	// 	x0 = MAX(0, x0);
 
-		// output:
-		//   int2 | pos (x,y)
-		//   uint32 | width
-		//   uint32 | rgba or gradient
+	// 	// output:
+	// 	//   int2 | pos (x,y)
+	// 	//   uint32 | width
+	// 	//   uint32 | rgba or gradient
 
-		int fill_info = path_fill_info[pidx];
-		output_buf[output_index] = ivec4((y0 << 16) | x0, x1 - x0, fill_info, 0);
-		
-	}
+	// 	int fill_info = path_fill_info[pidx];
+	// 	output_buf[output_index] = ivec4((y0 << 16) | x0, x1 - x0, fill_info, 0);
+	// }
 }

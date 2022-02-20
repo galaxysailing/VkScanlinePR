@@ -127,7 +127,7 @@ namespace vulkan {
 			}
 		}
 
-		// for debug
+		// ---------------------- for debug -----------------------
 		T* cptr() {
 			if (_host_data.ptr == nullptr) {
 				VkCommandBuffer copy_cmd = _device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
@@ -144,6 +144,19 @@ namespace vulkan {
 			}
 			return _host_data.ptr;
 		}
+		void cptr_clear() {
+			VkDevice device = _device->logicalDevice;
+			if (_host_data.ptr) {
+				_host_data.ptr = nullptr;
+				if (_host_data.buf) {
+					vkDestroyBuffer(device, _host_data.buf, nullptr);
+				}
+				if (_host_data.memory) {
+					vkFreeMemory(device, _host_data.memory, nullptr);
+				}
+			}
+		}
+		// ----------------------------------------------------------
 
 		T operator[](uint32_t index) {
 			VkCommandBuffer copy_cmd = _device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
