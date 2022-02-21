@@ -303,7 +303,7 @@ namespace vulkan {
 		void setupBufInfo() {
 			desc.buf_info.offset = 0;
 			desc.buf_info.buffer = _buffer;
-			desc.buf_info.range = _size;
+			desc.buf_info.range = _capacity;
 		}
 
 		VkBufferUsageFlags _usage_flags;

@@ -25,7 +25,7 @@ void main() {
 	// w: frag_index / 0
 	ivec4 draw = texelFetch(tb_index, index);
 
-	path_frag_pos = ivec2(draw.x & 0xFFFF, draw.x >> 16);
+	path_frag_pos = ivec2(draw.x & 0xFFFF, (draw.x >> 16) & 0xFFFF);
 
 	vec2 pos = vec2(
 		path_frag_pos.x + line_vi * draw.y,
@@ -36,7 +36,7 @@ void main() {
 
 	pos.y += 1;
 
-    vec2 vp_size = vec2(1200.0, 1024.0);
+    vec2 vp_size = vec2(1200.0f, 1024.0f);
 
 	pos.x = pos.x / vp_size.x * 2 - 1.0;
 	pos.y = pos.y / vp_size.y * 2 - 1.0;

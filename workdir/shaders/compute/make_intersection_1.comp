@@ -163,11 +163,11 @@ void get_xy_begin_end_delta(vec2 p0, vec2 p1, out int xbegin, out int xend, out 
 // 'out' key word will let variable become 0
 void udpate_cut_range(int w, int h, int xbegin, int xend, int ybegin, int yend, out int cut_n_x, out int cut_n_y){
     int cut_x_min = 0;
-	// int cut_x_max = (w & 0xFFFFFFFE) + FRAG_SIZE;
-    int cut_x_max = w + FRAG_SIZE;
+	int cut_x_max = (w & 0xFFFFFFFE) + FRAG_SIZE;
+    // int cut_x_max = w + FRAG_SIZE;
 	int cut_y_min = 0;
-	// int cut_y_max = (h & 0xFFFFFFFE) + FRAG_SIZE;
-    int cut_y_max = h + FRAG_SIZE;
+	int cut_y_max = (h & 0xFFFFFFFE) + FRAG_SIZE;
+    // int cut_y_max = h + FRAG_SIZE;
 	// width, height: 1200, 1024
 	// cut_x_max, cut_y_max: 1202, 1026
 
@@ -180,10 +180,10 @@ void udpate_cut_range(int w, int h, int xbegin, int xend, int ybegin, int yend, 
 	}
 	else {
         
-		xbegin = CLAMP(xbegin, cut_x_min, cut_x_max);
-		xend = CLAMP(xend, cut_x_min, cut_x_max);
+		xbegin = clamp(xbegin, cut_x_min, cut_x_max);
+		xend = clamp(xend, cut_x_min, cut_x_max);
 
-		cut_n_x = MAX((xend - xbegin) / FRAG_SIZE + 1, 0);
+		cut_n_x = max((xend - xbegin) / FRAG_SIZE + 1, 0);
 	}
 
 	if (
@@ -195,10 +195,10 @@ void udpate_cut_range(int w, int h, int xbegin, int xend, int ybegin, int yend, 
 	}
 	else {
         
-		ybegin = CLAMP(ybegin, cut_y_min, cut_y_max);
-		yend = CLAMP(yend, cut_y_min, cut_y_max);
+		ybegin = clamp(ybegin, cut_y_min, cut_y_max);
+		yend = clamp(yend, cut_y_min, cut_y_max);
 
-		cut_n_y = MAX((yend - ybegin) / FRAG_SIZE + 1, 0);
+		cut_n_y = max((yend - ybegin) / FRAG_SIZE + 1, 0);
 	}
 }
 
@@ -386,9 +386,9 @@ void main(){
 				if (i_t_out == (i_inte_last & 0xFFFFFFFC)) {
 					i_inte_out = i_inte_out | i_inte_last;
 
-					intersection[pcnt - 1] = ivec2(cidx, i_inte_out);
+					intersection[pcnt - 1] = ivec2(int(cidx), i_inte_out);
 				}
-                intersection[pcnt] = ivec2(cidx, i_inte_out);
+                intersection[pcnt] = ivec2(int(cidx), i_inte_out);
 				i_inte_last = i_inte_out;
 				++pcnt;
 			}
@@ -399,8 +399,8 @@ void main(){
 					float x0 = _shared.point_coords[SHARED_MAP(side * 4 + 0)];
 					float x1 = _shared.point_coords[SHARED_MAP(side * 4 + 1)];
                     float a = x1 - x0;
-                    a = (a != 0.0f ? (1.0f / a) : 0.0f);
-					t_solve = MIN(MAX((c - x0) * a, t_min), t1_ms);
+                    a = (a != 0.0f? (1.0f / a) : 0.0f);
+					t_solve = min(max((c - x0) * a, t_min), t1_ms);
 				}
 				else if (c_type == QUADRIC) {
                     // TODO

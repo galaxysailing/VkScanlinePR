@@ -1,7 +1,5 @@
 #version 450
 
-#define TEST
-
 #define BATCH_SIZE 1024
 #define BLOCK_SIZE 256
 #define _SYNC_() barrier()
@@ -13,11 +11,11 @@ layout (push_constant) uniform PushConsts {
     layout(offset = 4)int seg_size;
 } push_consts;
 
-layout(std430, binding = 0) buffer Keys{
+layout(std430, binding = 0) volatile buffer Keys{
     int keys[];
 };
 
-layout(std430, binding = 1) buffer Values{
+layout(std430, binding = 1) volatile buffer Values{
     int values[];
 };
 
@@ -27,56 +25,61 @@ layout(std430, binding = 2) buffer Segments{
 
 void main(){
     int seg_idx = int(gl_WorkGroupID.y * BLOCK_SIZE + gl_WorkGroupID.x);
-// #ifdef TEST
-//     keys[seg_idx] = seg_idx;
-//     return;
-// #endif
+// #define TEST
+#ifdef TEST
+    keys[seg_idx] = seg_idx;
+    return;
+#endif
     if(seg_idx >= push_consts.seg_size){
         return;
     }
+
     int thid = int(gl_LocalInvocationID.x);
     int kv_size = push_consts.kv_size;
     int segment_size = segments[seg_idx + 1] - segments[seg_idx];
     
-// #ifdef TEST
-//     keys[seg_idx] = segment_size;
-//     return;
-// #endif
+#ifdef TEST
+    keys[seg_idx] = segment_size;
+    return;
+#endif
+
     int batch_num = segment_size / (BATCH_SIZE * 2);
     int begin = segments[seg_idx];
     int flag = 1;
     for(int i = 0;i < segment_size; ++i){
         flag = 1 - flag;
         for(int bidx = 0; bidx <= batch_num; ++bidx){
-            int l_ind = begin + (bidx * BATCH_SIZE * 2 + thid * 2 + flag);
+            int l_ind = begin + (bidx * BATCH_SIZE * 2 + thid * 2 + flag + 0);
             int r_ind = begin + (bidx * BATCH_SIZE * 2 + thid * 2 + flag + 1);
-            int l = keys[l_ind];
-            int r = keys[r_ind];
             
             if(bidx == batch_num && r_ind >= (begin + segment_size)){
                 break;
             }
 
-            if(l > r){
+            int kl = keys[l_ind];
+            int kr = keys[r_ind];
+            int vl = values[l_ind];
+            int vr = values[r_ind];
+            
+
+            if(kl > kr || (kl == kr && vl > vr)){
                 // swap key
-                l ^= r;
-                r ^= l;
-                l ^= r;
-                // keys[l_ind] = l;
-                // keys[r_ind] = r;
-                atomicExchange(keys[l_ind], l);
-                atomicExchange(keys[r_ind], r);
+                kl ^= kr;
+                kr ^= kl;
+                kl ^= kr;
+                keys[l_ind] = kl;
+                keys[r_ind] = kr;
+                // atomicExchange(keys[l_ind], l);
+                // atomicExchange(keys[r_ind], r);
 
                 // swap key
-                l = values[l_ind];
-                r = values[r_ind];
-                l ^= r;
-                r ^= l;
-                l ^= r;
-                // values[l_ind] = l;
-                // values[r_ind] = r;
-                atomicExchange(values[l_ind], l);
-                atomicExchange(values[r_ind], r);
+                vl ^= vr;
+                vr ^= vl;
+                vl ^= vr;
+                values[l_ind] = vl;
+                values[r_ind] = vr;
+                // atomicExchange(values[l_ind], l);
+                // atomicExchange(values[r_ind], r);
             
             }
         }

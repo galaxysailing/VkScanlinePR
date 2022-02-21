@@ -116,7 +116,7 @@ void ScanlineVGRasterizer::loadVG(std::shared_ptr<VGContainer> vg_input)
     vector<uint32_t> curve_pos_map;
     vector<uint8_t> curve_type;
     vector<uint32_t> curve_path_idx;
-    curve_pos_map.reserve(n_curves + 1);
+    //curve_pos_map.reserve(n_curves + 1);
     curve_type.reserve(n_curves);
     curve_path_idx.reserve(n_curves);
 
@@ -162,7 +162,7 @@ void ScanlineVGRasterizer::loadVG(std::shared_ptr<VGContainer> vg_input)
     }
 
     // record final curve-pos map
-    curve_pos_map.push_back(n_points - 1);
+    //curve_pos_map.push_back(n_points - 1);
 
     auto& _in_curve = _compute.curve_input;
     auto& _in_path = _compute.path_input;
@@ -199,9 +199,8 @@ void ScanlineVGRasterizer::loadVG(std::shared_ptr<VGContainer> vg_input)
 
     // debug
     //uint32* ptr = (uint32*)_in_curve.curve_type->cptr();
-    //uint8* tmp = _in_curve.curve_type->cptr();
     //printf("-------------------- begin --------------------\n");
-    //for (int i = 0; i < _compute.curve_input.n_curves; ++i, ++ptr) {
+    //for (int i = 0; i < _compute.curve_input.n_curves; ++i) {
     //    printf("0x%08x\n", *ptr);
     //    uint offset = 0;
     //    printf("%u\n", ((ptr[0] >> offset) & 0x000000FF));
@@ -291,9 +290,9 @@ void ScanlineVGRasterizer::mockDataload() {
         glm::ivec4 v;
         std::istringstream iss(tstr);
         iss >> v.x >> v.y >> v.z >> v.w;
-        //if (v.w == 0) {
-        outputIndex.push_back(v);
-        //}
+        if (v.w != 0) {
+            outputIndex.push_back(v);
+        }
     }
     std::cout << "load success\n";
 }
@@ -551,7 +550,7 @@ void ScanlineVGRasterizer::drawFrame()
 
         output_desc.offset = 6 * stride_fragments * sizeof(int32_t);
         output_desc.buffer = input_desc.buffer;
-        output_desc.range = input_desc.range;
+        output_desc.range = (2 * n_fragments + 1) * sizeof(int32_t);
 
         write_desc_sets = {
             PUSH_SB_WRITE_DESC_SET(0, &input_desc),
@@ -573,9 +572,11 @@ void ScanlineVGRasterizer::drawFrame()
         VK_CHECK_RESULT(vkQueueWaitIdle(_compute.queue));
     }
 
+    //drawDebug();
+
     // gen_merged_fragment_and_span
-    int n_output_fragments = (*_csb.fragment_data)[stride_fragments * 6 + n_fragments - 1];
-    int n_spans = (*_csb.fragment_data)[stride_fragments * 6 + n_fragments * 2 - 1];
+    int n_output_fragments = (*_csb.fragment_data)[stride_fragments * 6 + n_fragments];
+    int n_spans = (*_csb.fragment_data)[stride_fragments * 6 + n_fragments * 2];
     n_spans -= n_output_fragments;
 
     _compute.merged_fragment = n_output_fragments;
@@ -643,6 +644,7 @@ void ScanlineVGRasterizer::drawFrame()
 
     write_desc_sets = {
         vk::initializer::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 0, &graphics.output_buf_view)
+        //vk::initializer::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 0, &graphics.outputIndexBuffer.bufferView)
     };
     //vkCmdBindDescriptorSets(_drawCmdBuffers[_currentBuffer], VK_PIPELINE_BIND_POINT_GRAPHICS, graphics.pipelineLayout, 0, 1, &graphics.descriptorSet, 0, NULL);
     _vkCmdPushDescriptorSetKHR(_drawCmdBuffers[_currentBuffer]
@@ -652,6 +654,7 @@ void ScanlineVGRasterizer::drawFrame()
         , static_cast<uint32_t>(write_desc_sets.size())
         , write_desc_sets.data());
     vkCmdDraw(_drawCmdBuffers[_currentBuffer], graphics.output_buf->size() * 2, 1, 0, 0);
+    //vkCmdDraw(_drawCmdBuffers[_currentBuffer], outputIndex.size() * 2, 1, 0, 0);
 
     //drawUI(drawCmdBuffers[i]);
 
@@ -703,8 +706,8 @@ void ScanlineVGRasterizer::drawDebug()
     // for point debug
     //vec2* ptr = _compute.storage_buffers.transformed_pos->cptr();
     //printf("-------------------- begin --------------------\n");
-    //for (int i = 0; i < _compute.curve_input.n_points; ++i, ++ptr) {
-    //    printf("%f, %f\n", ptr->x, ptr->y);
+    //for (int i = 0; i < _compute.curve_input.n_points; ++i) {
+    //    printf("%d: %f, %f\n", i, ptr[i].x, ptr[i].y);
     //}
     //printf("-------------------- end --------------------\n");
 
@@ -730,23 +733,24 @@ void ScanlineVGRasterizer::drawDebug()
 
 
     // for curve debug
-    int32_t* ptr = _compute.storage_buffers.curve_pixel_count->cptr();
-    printf("-------------------- begin --------------------\n");
-    for (int i = 0; i <= _compute.curve_input.n_curves; ++i) {
-        printf("%d\n", ptr[i]);
-        //printf("%f, %f\n", ptr->x, ptr->y);
-    }
-    printf("-------------------- end --------------------\n");
-    _compute.storage_buffers.curve_pixel_count->cptr_clear();
+    //int32_t* ptr = _compute.storage_buffers.curve_pixel_count->cptr();
+    //printf("-------------------- begin --------------------\n");
+    //for (int i = 0; i <= _compute.curve_input.n_curves; ++i) {
+    //    printf("%d\n", ptr[i]);
+    //    //printf("%f, %f\n", ptr->x, ptr->y);
+    //}
+    //printf("-------------------- end --------------------\n");
+    //_compute.storage_buffers.curve_pixel_count->cptr_clear();
 
     // for fragments
     //int* ptr = _compute.storage_buffers.fragment_data->cptr();
     //printf("-------------------- begin --------------------\n");
     //for (int i = 0; i <= _compute.stride_fragments; ++i) {
-    //    int yx = ptr[i];
-    //    int16_t y = (int16_t)((yx >> 16) - 0x7FFF);
-    //    int16_t x = (int16_t)((yx & 0xFFFF) - 0x7FFF);
-    //    printf("%d: %hd, %hd\n", i, x, y);
+    //    //int yx = ptr[i];
+    //    //int16_t y = (int16_t)((yx >> 16) - 0x7FFF);
+    //    //int16_t x = (int16_t)((yx & 0xFFFF) - 0x7FFF);
+    //    //printf("%d: %hd, %hd\n", i, x, y);
+    //    //printf("\n");
     //}
     //printf("-------------------- end --------------------\n");
 
@@ -1187,15 +1191,15 @@ void ScanlineVGRasterizer::prepareComputeBuffers()
     _c.trans_pos_in.n_points = _in_curve.n_points;
     _c.trans_pos_in.w = _width;
     _c.trans_pos_in.h = _height;
-    _c.trans_pos_in.m0 = vec4(1.03434348, 0, 0, 204.363617);
-    _c.trans_pos_in.m1 = vec4(0, 1.03434348, 0, 0);
-    _c.trans_pos_in.m2 = vec4(0, 0, 1, 0);
-    _c.trans_pos_in.m3 = vec4(0, 0, 0, 1);
-
-    //_c.trans_pos_in.m0 = vec4(38.851223, 0, 0, -2544.642822);
-    //_c.trans_pos_in.m1 = vec4(0, 38.851223, 0, -34850.464844);
+    //_c.trans_pos_in.m0 = vec4(1.03434348, 0, 0, 204.363617);
+    //_c.trans_pos_in.m1 = vec4(0, 1.03434348, 0, 0);
     //_c.trans_pos_in.m2 = vec4(0, 0, 1, 0);
     //_c.trans_pos_in.m3 = vec4(0, 0, 0, 1);
+
+    _c.trans_pos_in.m0 = vec4(38.851223, 0, 0, -2544.642822);
+    _c.trans_pos_in.m1 = vec4(0, 38.851223, 0, -34850.464844);
+    _c.trans_pos_in.m2 = vec4(0, 0, 1, 0);
+    _c.trans_pos_in.m3 = vec4(0, 0, 0, 1);
 
     _c.make_inte_in.w = _width;
     _c.make_inte_in.h = _height;
