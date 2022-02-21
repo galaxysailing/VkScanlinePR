@@ -10,9 +10,6 @@
     <Filter Include="workdir\shaders">
       <UniqueIdentifier>{1d5ccbd8-d7fd-4bee-b52e-3ee6f69c8302}</UniqueIdentifier>
     </Filter>
-    <Filter Include="src\test">
-      <UniqueIdentifier>{c1aa21de-b4d8-4420-ab63-09c97a06e6c3}</UniqueIdentifier>
-    </Filter>
     <Filter Include="src\core">
       <UniqueIdentifier>{67a87829-ce60-4a37-b1b4-968089ac04dc}</UniqueIdentifier>
     </Filter>
@@ -34,6 +31,12 @@
     <Filter Include="workdir\input\rvg">
       <UniqueIdentifier>{2c5b641c-c44e-4a5c-894e-8b6b66d68e3c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\core\scanline">
+      <UniqueIdentifier>{906f3b19-2e24-4ba3-b056-ee47c3edbc78}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\core\vulkan">
+      <UniqueIdentifier>{027c45d5-428e-4767-b6f0-f8df8b056a2e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\app\vg_app.cpp">
@@ -41,9 +44,6 @@
     </ClCompile>
     <ClCompile Include="src\main.cpp">
       <Filter>src</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\scanline\scanline_rasterizer.cpp">
-      <Filter>src\core</Filter>
     </ClCompile>
     <ClCompile Include="src\core\vg\rvg.cpp">
       <Filter>src\core\vg</Filter>
@@ -66,7 +66,12 @@
     <ClCompile Include="src\core\vk\vk_util.cpp">
       <Filter>src\core\vk</Filter>
     </ClCompile>
-    <ClCompile Include="src\core\vulkan\vk_vg_rasterizer.cpp" />
+    <ClCompile Include="src\core\scanline\scanline_rasterizer.cpp">
+      <Filter>src\core\scanline</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\vulkan\vk_vg_rasterizer.cpp">
+      <Filter>src\core\vulkan</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\rasterizer.h">
@@ -102,12 +107,24 @@
     <ClInclude Include="src\core\vk\vk_util.h">
       <Filter>src\core\vk</Filter>
     </ClInclude>
-    <ClInclude Include="src\core\scanline\scanline_rasterizer.h" />
-    <ClInclude Include="src\core\scanline\vk_vg_data.h" />
-    <ClInclude Include="src\core\vulkan\vk_vg_rasterizer.h" />
-    <ClInclude Include="src\core\vulkan\vulkan_buffer.h" />
-    <ClInclude Include="src\core\common\compute_kernal.h" />
-    <ClInclude Include="src\core\scanline\compute_ubo.h" />
+    <ClInclude Include="src\core\common\compute_kernal.h">
+      <Filter>src\core\common</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\scanline\compute_ubo.h">
+      <Filter>src\core\scanline</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\scanline\scanline_rasterizer.h">
+      <Filter>src\core\scanline</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\scanline\vk_vg_data.h">
+      <Filter>src\core\scanline</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\vulkan\vulkan_buffer.h">
+      <Filter>src\core\vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\vulkan\vk_vg_rasterizer.h">
+      <Filter>src\core\vulkan</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\workdir\input\rvg\test.rvg">

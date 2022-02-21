@@ -166,7 +166,8 @@ private:
 private:
 
     // const
-    const std::string COMPUTE_SPV_DIR = "shaders/compute/spv/";
+    const std::string SURFACE_SPV_DIR = "shaders/scanline/surface/spv/";
+    const std::string COMPUTE_SPV_DIR = "shaders/scanline/compute/spv/";
     const std::string COMMON_COMPUTE_SPV_DIR = "shaders/common/spv/";
     const int BLOCK_SIZE = 256;
 

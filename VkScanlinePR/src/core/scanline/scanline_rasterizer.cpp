@@ -895,8 +895,8 @@ void ScanlineVGRasterizer::preparePipelines()
     // Rendering pipeline
     std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages;
 
-    shaderStages[0] = loadShader("shaders/scanlinepr.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-    shaderStages[1] = loadShader("shaders/scanlinepr.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+    shaderStages[0] = loadShader(SURFACE_SPV_DIR + "scanlinepr.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+    shaderStages[1] = loadShader(SURFACE_SPV_DIR + "scanlinepr.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
     VkGraphicsPipelineCreateInfo pipelineCreateInfo = vk::initializer::pipelineCreateInfo(graphics.pipelineLayout, _renderPass);
 
