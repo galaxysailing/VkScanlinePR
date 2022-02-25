@@ -2,6 +2,8 @@
 #include <memory>
 #include <iostream>
 #include "windows.h"
+
+#include<glm/glm.hpp>
 std::shared_ptr<VGApplication> app;
 
 int main(void) {
@@ -9,6 +11,7 @@ int main(void) {
 	try {
 		app->appName("hello scanline vector graphic")
 			->viewport(0, 0, 1200, 1024)
+			//->loadPathFile("./input/rvg/paper-1.rvg")
 			->loadPathFile("./input/rvg/test.rvg")
 			->run();
 	}catch (std::exception& e) {

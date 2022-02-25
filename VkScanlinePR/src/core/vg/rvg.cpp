@@ -119,6 +119,7 @@ void RVG::parse_paths(std::ifstream& fin)
 		}
 		
 		vg.newPath();
+		//printf("path idx %d begin\n", vg.pathData.pathIndex);
 
 		assert(tstr == "1");
 		fin >> tstr;
@@ -148,10 +149,15 @@ void RVG::parse_paths(std::ifstream& fin)
 		glm::vec2 p[4];
 		// process curve
 		while (fin >> tstr) {
+			if (tstr != "fL" && tstr.length() != 1) {
+				break;
+			}
 			
 			char cmd = tstr[0];
 			if (std::string("MmZzLlCcAa").find(cmd) == std::string::npos) {
-				break;
+				if (tstr != "fL") {
+					break;
+				}
 			}
 
 			//auto& curveInd = vg.curveData.curveIndex;
@@ -176,7 +182,11 @@ void RVG::parse_paths(std::ifstream& fin)
 				break;
 			case 'Z':
 				break;
-			default: break;
+			default: 
+				if (tstr == "fL") {
+					p[0] = read_point();
+				}
+				break;
 
 			}
 		}
@@ -208,7 +218,7 @@ void RVG::parse_paths(std::ifstream& fin)
 				iss >> color.r >> color.g >> color.b;
 			}
 		}
-
+		//printf("path idx %d end\n", vg.pathData.pathIndex);
 
 	}
 }

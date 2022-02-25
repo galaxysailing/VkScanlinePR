@@ -66,7 +66,7 @@ namespace Galaxysailing {
 using _Base = Galaxysailing::VulkanVGRasterizerBase;
  
 // -------------------------------- public interface --------------------------------
-void ScanlineVGRasterizer::initialize(void* window, uint32_t w, uint32_t h)
+void ScanlineVGRasterizer::initialize(void *window, uint32_t w, uint32_t h)
 {
     // about window
     _window = (GLFWwindow*)window;
@@ -924,73 +924,12 @@ void ScanlineVGRasterizer::preparePipelines()
 
 void ScanlineVGRasterizer::prepareCompute()
 {
-//// --------------------------------------------------------- compute function ------------------------------------------------------------
-//    // Create compute pipeline
-//    std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
-//        vk::initializer::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 0),
-//        vk::initializer::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 1),
-//        vk::initializer::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 2),
-//        vk::initializer::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 3),
-//        vk::initializer::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 4),
-//    };
-//
-//    VkDescriptorSetLayoutCreateInfo descriptorLayout =
-//        vk::initializer::descriptorSetLayoutCreateInfo(setLayoutBindings);
-//    descriptorLayout.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
-//
-//    VK_CHECK_RESULT(vkCreateDescriptorSetLayout(_device, &descriptorLayout, nullptr, &_compute.descriptorSetLayout));
-//
-//    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo =
-//        vk::initializer::pipelineLayoutCreateInfo(&_compute.descriptorSetLayout, 1);
-//
-//    VK_CHECK_RESULT(vkCreatePipelineLayout(_device, &pipelineLayoutCreateInfo, nullptr, &_compute.pipelineLayout));
-//
-//    //VkDescriptorSetAllocateInfo allocInfo =
-//    //    vk::initializer::descriptorSetAllocateInfo(_descriptorPool, &_compute.descriptorSetLayout, 1);
-//
-//    //VK_CHECK_RESULT(vkAllocateDescriptorSets(_device, &allocInfo, &_compute.descriptorSet));
-//
-//    //auto& _c = _compute;
-//    //auto& _cin_curve = _c.curve_input;
-//    //auto& _csb = _c.storage_buffers;
-//    //auto& _cub = _c.uniform_buffers;
-//    //std::vector<VkWriteDescriptorSet> computeWriteDescriptorSets = {
-//    //        vk::initializer::writeDescriptorSet(_compute.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0, &_cin_curve.position->descriptor.buf_info),
-//    //        vk::initializer::writeDescriptorSet(_compute.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, &_cin_curve.position_path_idx->descriptor.buf_info),
-//    //        vk::initializer::writeDescriptorSet(_compute.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2, &_csb.transformed_pos->descriptor.buf_info),
-//    //        vk::initializer::writeDescriptorSet(_compute.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3, &_csb.path_visible->descriptor.buf_info),
-//    //        vk::initializer::writeDescriptorSet(_compute.descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4, &_cub.transformPosUBO->descriptor.buf_info),
-//    //        vk::initializer::writeDescriptorSet(_compute.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 5, &_csb.test->descriptor.buf_info),
-//    //};
-//
-//    //vkUpdateDescriptorSets(_device, static_cast<uint32_t>(computeWriteDescriptorSets.size()), computeWriteDescriptorSets.data(), 0, nullptr);
-//
-//    VkComputePipelineCreateInfo computePipelineCreateInfo = vk::initializer::computePipelineCreateInfo(_compute.pipelineLayout, 0);
-//    computePipelineCreateInfo.stage = loadShader("shaders/compute/transformPos.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
-//    VK_CHECK_RESULT(vkCreateComputePipelines(_device, _pipelineCache, 1, &computePipelineCreateInfo, nullptr, &_compute.pipeline));
-//
-//// ---------------------------------------------------------------------------------------------------------------------------------------
-//
     // Separate command pool as queue family for compute may be different than graphics
     VkCommandPoolCreateInfo cmdPoolInfo = {};
     cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     cmdPoolInfo.queueFamilyIndex = _vulkanDevice->queueFamilyIndices.compute;
     cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     VK_CHECK_RESULT(vkCreateCommandPool(_device, &cmdPoolInfo, nullptr, &_compute.cmd_pool));
-//
-//    // Create a command buffer for compute operations
-//    VkCommandBufferAllocateInfo cmdBufAllocateInfo =
-//        vk::initializer::commandBufferAllocateInfo(_compute.commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
-//
-//    VK_CHECK_RESULT(vkAllocateCommandBuffers(_device, &cmdBufAllocateInfo, &_compute.commandBuffer));
-//
-//    // Semaphores for graphics / compute synchronization
-//    VkSemaphoreCreateInfo semaphoreCreateInfo = vk::initializer::semaphoreCreateInfo();
-//    VK_CHECK_RESULT(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &_compute.semaphores.ready));
-//    VK_CHECK_RESULT(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &_compute.semaphores.complete));
-//
-//    // Build a single command buffer containing the compute dispatch commands
-//    buildComputeCommandBuffer();
 
 
     // CPU-GPU synchronization
@@ -1049,8 +988,8 @@ void ScanlineVGRasterizer::prepareCompute()
         DESC_TYPE_SB,DESC_TYPE_SB,
         DESC_TYPE_SB,DESC_TYPE_SB
     };
+
     _k.make_intersection_1 = COMPUTE_KERNAL(dt_make_int_1, COMPUTE_SPV_DIR + "make_intersection_1.comp.spv", nullptr);
-    //_k.make_intersection_1->buildCmdBuffer(divup(_compute.curve_input.n_curves, BLOCK_SIZE), wds_make_int_1);
     
     // generate fragments
     std::vector<VkDescriptorType> dt_gen_frag{
@@ -1191,6 +1130,7 @@ void ScanlineVGRasterizer::prepareComputeBuffers()
     _c.trans_pos_in.n_points = _in_curve.n_points;
     _c.trans_pos_in.w = _width;
     _c.trans_pos_in.h = _height;
+
     //_c.trans_pos_in.m0 = vec4(1.03434348, 0, 0, 204.363617);
     //_c.trans_pos_in.m1 = vec4(0, 1.03434348, 0, 0);
     //_c.trans_pos_in.m2 = vec4(0, 0, 1, 0);

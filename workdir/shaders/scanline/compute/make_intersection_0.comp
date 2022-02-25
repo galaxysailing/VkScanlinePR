@@ -195,11 +195,6 @@ void main() {
     if (cidx >= ubo.n_curves){ 
 		return;
     }
-// #define TEST
-// #ifdef TEST
-//     curve_pixel_count[cidx] = int(cidx);
-//     return;
-// #endif
     uint shared_index = gl_LocalInvocationID.x;
 
     uint poidx = curve_pos_map[cidx];
@@ -211,6 +206,7 @@ void main() {
     // value            01  02  04  08
     // result 32-bit:   0x08040201
     uint c_type = ((curve_type[ct_idx] >> ct_offset) & 0x000000FF);
+    
 // #define TEST
 #ifdef TEST
     curve_pixel_count[cidx] = int(curve_type[ct_idx]);

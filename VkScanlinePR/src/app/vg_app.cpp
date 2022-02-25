@@ -46,6 +46,10 @@ private:
 	std::shared_ptr<VGRasterizer> _vgRasterizer;
 
 	bool _init;
+
+// for user operation
+private:
+	static void cursorPosCallback(GLFWwindow* window, double xpos, double ypos);	
 };
 
 
@@ -58,6 +62,10 @@ void ScanlineVGApplication::initWindow() {
 
 	_window = glfwCreateWindow(_width, _height, _appName.c_str(), nullptr, nullptr);
 	glfwSetWindowUserPointer(_window, this);
+
+	//mouse
+	glfwSetCursorPosCallback(_window, ScanlineVGApplication::cursorPosCallback);
+
 	//glfwSetFramebufferSizeCallback(_window, framebufferResizeCallback);
 }
 void ScanlineVGApplication::cleanupWindow()
@@ -66,6 +74,14 @@ void ScanlineVGApplication::cleanupWindow()
 
 	glfwTerminate();
 }
+// ------------------------------ user operation ---------------------------------------
+void ScanlineVGApplication::cursorPosCallback(GLFWwindow* window, double xpos, double ypos)
+{
+	ScanlineVGApplication* that = (ScanlineVGApplication*)glfwGetWindowUserPointer(window);
+	//printf("window size: %d, %d\n", that->_width, that->_height);
+	printf("mouse pos: %f, %f\n", xpos, ypos);
+}
+
 // ------------------------------ implement of public function ---------------------------
 void ScanlineVGApplication::run() {
 	if (!_init) {
