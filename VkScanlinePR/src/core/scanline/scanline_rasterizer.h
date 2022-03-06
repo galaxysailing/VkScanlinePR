@@ -28,7 +28,9 @@ using namespace glm;
 namespace Galaxysailing {
 
 
-class ScanlineVGRasterizer : public VulkanVGRasterizerBase, public VGRasterizer {
+class ScanlineVGRasterizer 
+    : public VulkanVGRasterizerBase, public VGRasterizer 
+{
 // ----------------------------- rasterizer interface ------------------------
 public:
 
@@ -37,6 +39,8 @@ public:
 	void render() override;
 
     void loadVG(std::shared_ptr<VGContainer> vg) override;
+
+    void setMVP(const glm::mat4& m) override;
 
     //void viewport(int x, int y, int w, int h) override;
 

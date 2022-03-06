@@ -14,6 +14,8 @@ public:
 
     virtual void loadVG(std::shared_ptr<VGContainer> vg) = 0;
 
+    virtual void setMVP(const glm::mat4& m) = 0;
+
 	//virtual void viewport(int x, int y, int w, int h) = 0;
 };
 

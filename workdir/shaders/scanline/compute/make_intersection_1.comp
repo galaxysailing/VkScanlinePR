@@ -7,6 +7,7 @@ layout (local_size_x = BLOCK_SIZE) in;
 #define SHARED_MAP(i) (shared_index + (i) * BLOCK_SIZE)
 #define CUT_POINT_MAP(i) (5 * i)
 #define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
+// #define LERP(a, b, t) ((a) + (t) * ((b) - (a)))
 #define MAX(a, b) (((a)>(b))?(a):(b))
 #define MIN(a, b) (((a)<(b))?(a):(b))
 #define CLAMP(v, mi, ma) (MIN(ma, MAX(v, mi))) 
@@ -70,7 +71,7 @@ shared struct {
 
 // -------------------- helper function -----------------
 float interpolateGeneralCurve(uint curve_type, float t, uint shared_index, uint offset){
-    float res = 1.0f;
+    float res = 0.0f;
     switch(curve_type){
         case LINE:{
             float x0 = _shared.point_coords[SHARED_MAP(offset * 4 + 0)];
@@ -180,10 +181,10 @@ void udpate_cut_range(int w, int h, int xbegin, int xend, int ybegin, int yend, 
 	}
 	else {
         
-		xbegin = clamp(xbegin, cut_x_min, cut_x_max);
-		xend = clamp(xend, cut_x_min, cut_x_max);
+		xbegin = CLAMP(xbegin, cut_x_min, cut_x_max);
+		xend = CLAMP(xend, cut_x_min, cut_x_max);
 
-		cut_n_x = max((xend - xbegin) / FRAG_SIZE + 1, 0);
+		cut_n_x = MAX((xend - xbegin) / FRAG_SIZE + 1, 0);
 	}
 
 	if (
@@ -195,10 +196,10 @@ void udpate_cut_range(int w, int h, int xbegin, int xend, int ybegin, int yend, 
 	}
 	else {
         
-		ybegin = clamp(ybegin, cut_y_min, cut_y_max);
-		yend = clamp(yend, cut_y_min, cut_y_max);
+		ybegin = CLAMP(ybegin, cut_y_min, cut_y_max);
+		yend = CLAMP(yend, cut_y_min, cut_y_max);
 
-		cut_n_y = max((yend - ybegin) / FRAG_SIZE + 1, 0);
+		cut_n_y = MAX((yend - ybegin) / FRAG_SIZE + 1, 0);
 	}
 }
 

@@ -215,6 +215,14 @@ void ScanlineVGRasterizer::loadVG(std::shared_ptr<VGContainer> vg_input)
 
 }
 
+void ScanlineVGRasterizer::setMVP(const glm::mat4& m)
+{
+    _compute.trans_pos_in.m0 = m[0];
+    _compute.trans_pos_in.m1 = m[1];
+    _compute.trans_pos_in.m2 = m[2];
+    _compute.trans_pos_in.m3 = m[3];
+}
+
 //void ScanlineVGRasterizer::viewport(int x, int y, int w, int h)
 //{
 //    if (!_initialized) {
@@ -313,6 +321,8 @@ void ScanlineVGRasterizer::drawFrame()
 
     static bool is_first_draw = true;
     std::vector<VkPipelineStageFlags> wait_dst_stage_masks = { VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT };
+
+    _compute.uniform_buffers.k_trans_pos_ubo->set(_compute.trans_pos_in, 1);
 
     // transform position
     std::vector<VkSemaphore> wait_sema = {};
@@ -1131,15 +1141,20 @@ void ScanlineVGRasterizer::prepareComputeBuffers()
     _c.trans_pos_in.w = _width;
     _c.trans_pos_in.h = _height;
 
+    _c.trans_pos_in.m0 = vec4(1, 0, 0, 1);
+    _c.trans_pos_in.m1 = vec4(0, 1, 0, 0);
+    _c.trans_pos_in.m2 = vec4(0, 0, 1, 0);
+    _c.trans_pos_in.m3 = vec4(0, 0, 0, 1);
+
     //_c.trans_pos_in.m0 = vec4(1.03434348, 0, 0, 204.363617);
     //_c.trans_pos_in.m1 = vec4(0, 1.03434348, 0, 0);
     //_c.trans_pos_in.m2 = vec4(0, 0, 1, 0);
     //_c.trans_pos_in.m3 = vec4(0, 0, 0, 1);
 
-    _c.trans_pos_in.m0 = vec4(38.851223, 0, 0, -2544.642822);
-    _c.trans_pos_in.m1 = vec4(0, 38.851223, 0, -34850.464844);
-    _c.trans_pos_in.m2 = vec4(0, 0, 1, 0);
-    _c.trans_pos_in.m3 = vec4(0, 0, 0, 1);
+    //_c.trans_pos_in.m0 = vec4(38.851223, 0, 0, -2544.642822);
+    //_c.trans_pos_in.m1 = vec4(0, 38.851223, 0, -34850.464844);
+    //_c.trans_pos_in.m2 = vec4(0, 0, 1, 0);
+    //_c.trans_pos_in.m3 = vec4(0, 0, 0, 1);
 
     _c.make_inte_in.w = _width;
     _c.make_inte_in.h = _height;

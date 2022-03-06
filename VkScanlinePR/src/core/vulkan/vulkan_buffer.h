@@ -248,7 +248,7 @@ namespace vulkan {
 
 		void updateBuffer(T* data, VkDeviceSize buf_size) {
 			VkDevice device = _device->logicalDevice;
-			if (_memory_property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT != 0) {
+			if ((_memory_property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0) {
 				void* cptr;
 				vkMapMemory(device, _memory, 0, buf_size, 0, &cptr);
 				memcpy(cptr, (void*)data, buf_size);
