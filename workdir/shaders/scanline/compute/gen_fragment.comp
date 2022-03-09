@@ -6,8 +6,8 @@ layout (local_size_x = BLOCK_SIZE) in;
 
 #define MAX(a, b) (((a)>(b))?(a):(b))
 #define MIN(a, b) (((a)<(b))?(a):(b))
-// #define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
-#define LERP(a, b, t) ((a) + (t)*((b)-(a)))
+#define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
+// #define LERP(a, b, t) ((a) + (t)*((b)-(a)))
 
 #define LINE 0x02
 #define QUADRIC 0x03
@@ -50,6 +50,11 @@ layout(std430, binding = 5) buffer FragmentData{
 // ------------------------------------------------------------
 
 // ------------------------- helper ---------------------------
+
+int float2int_rd(float x){
+    return x >= 0.0f?int(x):int(x - 1.0f);
+}
+
 vec2 curve_interpolate(uint curve_type, float t, in vec2 cv0, in vec2 cv1, in vec2 cv2, in vec2 cv3){
     vec2 res = cv0;
     switch(curve_type){
@@ -161,52 +166,43 @@ void main(){
         sf = inte_flag0;
         sl = inte_flag1;
 
-        int raw_frag_x = int(((pf.x + pl.x) * 0.5f) / FRAG_SIZE) * FRAG_SIZE;
-        int raw_frag_y = int(((pf.y + pl.y) * 0.5f) / FRAG_SIZE) * FRAG_SIZE;
+        // int raw_frag_x = int(((pf.x + pl.x) * 0.5f) / FRAG_SIZE) * FRAG_SIZE;
+        // int raw_frag_y = int(((pf.y + pl.y) * 0.5f) / FRAG_SIZE) * FRAG_SIZE;
 
-        // int pos_x = clamp(raw_frag_x, -FRAG_SIZE, int((width & 0xFFFFFFFE) + FRAG_SIZE));
-        // int pos_y = clamp(raw_frag_y, -FRAG_SIZE, int((height & 0xFFFFFFFE) + FRAG_SIZE));
+        int raw_frag_x = float2int_rd(((pf.x + pl.x) * 0.5f) / FRAG_SIZE) * FRAG_SIZE;
+        int raw_frag_y = float2int_rd(((pf.y + pl.y) * 0.5f) / FRAG_SIZE) * FRAG_SIZE;
 
-        int pos_x = min(max(raw_frag_x, -FRAG_SIZE), int((width & 0xFFFFFFFE) + FRAG_SIZE));
-        int pos_y = min(max(raw_frag_y, -FRAG_SIZE), int((height & 0xFFFFFFFE) + FRAG_SIZE));
+        // int raw_frag_x = float2int_rd(((pf.x + pl.x) * 0.5f)) & 0xFFFFFFFE;
+        // int raw_frag_y = float2int_rd(((pf.y + pl.y) * 0.5f)) & 0xFFFFFFFE;
+
+        int pos_x = clamp(raw_frag_x, -FRAG_SIZE, int((width & 0xFFFFFFFE) + FRAG_SIZE));
+        int pos_y = clamp(raw_frag_y, -FRAG_SIZE, int((height & 0xFFFFFFFE) + FRAG_SIZE));
+        // int pos_x = min(max(raw_frag_x, -FRAG_SIZE), int((width & 0xFFFFFFFE) + FRAG_SIZE));
+        // int pos_y = min(max(raw_frag_y, -FRAG_SIZE), int((height & 0xFFFFFFFE) + FRAG_SIZE));
 
         int y_shift = ((pos_y + 0x7FFF) << 16);
         int x_shift = ((pos_x + 0x7FFF) & 0xFFFF);
 
 
-        // ---------- original version ------------------
+        // ---------- scan winding number ------------------
         if(uint(raw_frag_y) < uint(height)){
             yx = y_shift | x_shift;
         }
         int wn_y = pos_y + 1;
 
         scan_winding_number = 0;
-        if(pf.y == pl.y){
-            scan_winding_number = 0;
-        }else{
-            if(pf.y <= wn_y && wn_y < pl.y){
-                scan_winding_number = -1;
-            }else if(pl.y <= wn_y && wn_y < pf.y){
-                scan_winding_number = 1;
-            }
+        if(pf.y <= wn_y && wn_y < pl.y){
+            scan_winding_number = -1;
+        }else if(pl.y <= wn_y && wn_y < pf.y){
+            scan_winding_number = 1;
         }
-        // ---------------------------------------------
-
-
-        // if(uint(raw_frag_y) < uint(height)){
-        //     yx = y_shift | x_shift;
-        //     int wn_y = pos_y + 1;
-
+        // if(pf.y == pl.y){
         //     scan_winding_number = 0;
-        //     if(pf.y == pl.y){
-        //         scan_winding_number = 0;
-        //     }else{
-        //         if(pf.y <= wn_y && wn_y < pl.y){
-        //             scan_winding_number = -1;
-        //         }else if(pl.y <= wn_y && wn_y < pf.y){
-        //             scan_winding_number = 1;
-        //         }
-
+        // }else{
+        //     if(pf.y <= wn_y && wn_y < pl.y){
+        //         scan_winding_number = -1;
+        //     }else if(pl.y <= wn_y && wn_y < pf.y){
+        //         scan_winding_number = 1;
         //     }
         // }
         

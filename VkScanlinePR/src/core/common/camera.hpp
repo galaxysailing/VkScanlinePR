@@ -47,7 +47,7 @@ public:
 			return;
 		}
 		translate(-_last_pos.x, -_last_pos.y);
-		scale(dy > 0 ? 1.05f : 0.95f);
+		scale(dy > 0 ? 1.04f : 0.96f);
 		translate(_last_pos.x, _last_pos.y);
 	}
 

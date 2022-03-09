@@ -68,6 +68,10 @@ shared struct {
 
 // -------------------- helper function -----------------
 
+int float2int_rd(float x){
+    return x >= 0.0f?int(x):int(x - 1.0f);
+}
+
 void solveQuadEquation(float a, float b, float c, out float r0, out float r1){
     if(a == 0.0f){
         r0 = r1 = -c / b;
@@ -130,19 +134,19 @@ float interpolateGeneralCurve(uint curve_type, float t, uint shared_index, uint 
 
 void get_xy_begin_end(vec2 p0, vec2 p1, out int xbegin, out int xend, out int ybegin, out int yend){
     if(p0.x <= p1.x) {
-        xbegin = (int(p0.x / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
-        xend = (int(p1.x / FRAG_SIZE) * FRAG_SIZE);
+        xbegin = int(float2int_rd(p0.x / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
+        xend = int(float2int_rd(p1.x / FRAG_SIZE) * FRAG_SIZE);
     } else {
-        xbegin = (int(p1.x / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
-        xend = (int(p0.x / FRAG_SIZE) * FRAG_SIZE);
+        xbegin = int(float2int_rd(p1.x / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
+        xend = int(float2int_rd(p0.x / FRAG_SIZE) * FRAG_SIZE);
     }
 
     if(p0.y <= p1.y) {
-        ybegin = (int(p0.y / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
-        yend = (int(p1.y / FRAG_SIZE) * FRAG_SIZE);
+        ybegin = int(float2int_rd(p0.y / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
+        yend = int(float2int_rd(p1.y / FRAG_SIZE) * FRAG_SIZE);
     } else {
-        ybegin = (int(p1.y / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
-        yend = (int(p0.y / FRAG_SIZE) * FRAG_SIZE);
+        ybegin = int(float2int_rd(p1.y / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
+        yend = int(float2int_rd(p0.y / FRAG_SIZE) * FRAG_SIZE);
     }
 }
 

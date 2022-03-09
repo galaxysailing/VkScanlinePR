@@ -4,12 +4,12 @@
 
 layout (local_size_x = BLOCK_SIZE) in;
 
-#define CUBIC_ITERATION_NUMBER 32
+#define CUBIC_ITERATION_NUMBER 24
 
 #define SHARED_MAP(i) (shared_index + (i) * BLOCK_SIZE)
 #define CUT_POINT_MAP(i) (5 * i)
-// #define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
-#define LERP(a, b, t) ((a) + (t) * ((b) - (a)))
+#define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
+// #define LERP(a, b, t) ((a) + (t) * ((b) - (a)))
 #define MAX(a, b) (((a)>(b))?(a):(b))
 #define MIN(a, b) (((a)<(b))?(a):(b))
 #define CLAMP(v, mi, ma) (MIN(ma, MAX(v, mi))) 
@@ -72,6 +72,11 @@ shared struct {
 } _shared;
 
 // -------------------- helper function -----------------
+
+int float2int_rd(float x){
+    return x >= 0.0f?int(x):int(x - 1.0f);
+}
+
 float interpolateGeneralCurve(uint curve_type, float t, uint shared_index, uint offset){
     float res = 0.0f;
     switch(curve_type){
@@ -143,22 +148,22 @@ float interpolateGeneralCurve(uint curve_type, float t, float p0, float p1, floa
 
 void get_xy_begin_end_delta(vec2 p0, vec2 p1, out int xbegin, out int xend, out int ybegin, out int yend, out float dx, out float dy){
     if(p0.x <= p1.x) {
-        xbegin = (int(p0.x / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
-        xend = (int(p1.x / FRAG_SIZE) * FRAG_SIZE);
+        xbegin = int(float2int_rd(p0.x / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
+        xend = int(float2int_rd(p1.x / FRAG_SIZE) * FRAG_SIZE);
         dx = FRAG_SIZE;
     } else {
-        xbegin = (int(p1.x / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
-        xend = (int(p0.x / FRAG_SIZE) * FRAG_SIZE);
+        xbegin = int(float2int_rd(p1.x / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
+        xend = int(float2int_rd(p0.x / FRAG_SIZE) * FRAG_SIZE);
         dx = -FRAG_SIZE;
     }
 
     if(p0.y <= p1.y) {
-        ybegin = (int(p0.y / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
-        yend = (int(p1.y / FRAG_SIZE) * FRAG_SIZE);
+        ybegin = int(float2int_rd(p0.y / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
+        yend = int(float2int_rd(p1.y / FRAG_SIZE) * FRAG_SIZE);
         dy = FRAG_SIZE;
     } else {
-        ybegin = (int(p1.y / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
-        yend = (int(p0.y / FRAG_SIZE) * FRAG_SIZE);
+        ybegin = int(float2int_rd(p1.y / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
+        yend = int(float2int_rd(p0.y / FRAG_SIZE) * FRAG_SIZE);
         dy = -FRAG_SIZE;
     }
 }

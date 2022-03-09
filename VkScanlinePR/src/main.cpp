@@ -10,8 +10,10 @@ int main(void) {
 	try {
 		app->appName("hello scanline vector graphic")
 			->viewport(0, 0, 1200, 1024)
-			//->loadPathFile("./input/rvg/paper-1.rvg")
-			->loadPathFile("./input/rvg/test.rvg")
+			//->loadPathFile("./input/rvg/boston.rvg")
+			->loadPathFile("./input/rvg/paper-1.rvg")
+			//->loadPathFile("./input/rvg/paper-2.rvg")
+			//->loadPathFile("./input/rvg/test.rvg")
 			->run();
 	}catch (std::exception& e) {
 		printf("\n");

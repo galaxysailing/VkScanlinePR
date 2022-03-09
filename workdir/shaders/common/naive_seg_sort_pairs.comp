@@ -2,7 +2,7 @@
 
 #define BATCH_SIZE 1024
 #define BLOCK_SIZE 256
-#define _SYNC_()  groupMemoryBarrier(); barrier()
+#define _SYNC_() groupMemoryBarrier(); barrier()
 
 layout (local_size_x = BATCH_SIZE) in;
 
@@ -80,7 +80,6 @@ void main(){
                 // values[r_ind] = vr;
                 atomicExchange(values[l_ind], vl);
                 atomicExchange(values[r_ind], vr);
-            
             }
         }
         _SYNC_();
