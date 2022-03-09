@@ -2,7 +2,7 @@
 
 #define BATCH_SIZE 1024
 #define BLOCK_SIZE 256
-#define _SYNC_() barrier()
+#define _SYNC_()  groupMemoryBarrier(); barrier()
 
 layout (local_size_x = BATCH_SIZE) in;
 
@@ -67,19 +67,19 @@ void main(){
                 kl ^= kr;
                 kr ^= kl;
                 kl ^= kr;
-                keys[l_ind] = kl;
-                keys[r_ind] = kr;
-                // atomicExchange(keys[l_ind], l);
-                // atomicExchange(keys[r_ind], r);
+                // keys[l_ind] = kl;
+                // keys[r_ind] = kr;
+                atomicExchange(keys[l_ind], kl);
+                atomicExchange(keys[r_ind], kr);
 
-                // swap key
+                // swap value
                 vl ^= vr;
                 vr ^= vl;
                 vl ^= vr;
-                values[l_ind] = vl;
-                values[r_ind] = vr;
-                // atomicExchange(values[l_ind], l);
-                // atomicExchange(values[r_ind], r);
+                // values[l_ind] = vl;
+                // values[r_ind] = vr;
+                atomicExchange(values[l_ind], vl);
+                atomicExchange(values[r_ind], vr);
             
             }
         }

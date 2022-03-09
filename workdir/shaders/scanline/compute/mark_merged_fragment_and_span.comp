@@ -53,9 +53,6 @@ void main(){
 		int pidx_0 = fragment_data[2 * stride_fragments + fidx - 1] & 0x3FFFFFFF;
 		int pidx_1 = fragment_data[2 * stride_fragments + fidx] & 0x3FFFFFFF;
 
-		// 0: FT_NONE
-		// 1: FT_COLOR
-		// 4: FT_GRADIENT
 		uint pfr_idx = (pidx_1 >> 2);
         uint pfr_offset = (pidx_1 % 4) << 3;
         // little end: 
@@ -81,7 +78,7 @@ void main(){
 		int wn = fragment_data[3 * stride_fragments + fidx];
 
 		// span begin(1 or -1) is always added to span end. so winding number is not *zero*.
-		bool wn_flag = (((fill_rule == 0) && (wn != 0)) || ((fill_rule == 1) && ((wn & 1) == 1)));
+		bool wn_flag = (((fill_rule == 0) && (wn != 0)) || ((fill_rule == 1) && ((wn & 1) != 0)));
 		
 		if (y0 == y1 && ((x0 + FRAG_SIZE) < x1) && pidx_0 == pidx_1 && wn_flag) {
 			span_flag = 1;

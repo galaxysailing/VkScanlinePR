@@ -4,10 +4,12 @@
 
 layout (local_size_x = BLOCK_SIZE) in;
 
+#define CUBIC_ITERATION_NUMBER 32
+
 #define SHARED_MAP(i) (shared_index + (i) * BLOCK_SIZE)
 #define CUT_POINT_MAP(i) (5 * i)
-#define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
-// #define LERP(a, b, t) ((a) + (t) * ((b) - (a)))
+// #define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
+#define LERP(a, b, t) ((a) + (t) * ((b) - (a)))
 #define MAX(a, b) (((a)>(b))?(a):(b))
 #define MIN(a, b) (((a)<(b))?(a):(b))
 #define CLAMP(v, mi, ma) (MIN(ma, MAX(v, mi))) 
@@ -162,7 +164,8 @@ void get_xy_begin_end_delta(vec2 p0, vec2 p1, out int xbegin, out int xend, out 
 }
 
 // 'out' key word will let variable become 0
-void udpate_cut_range(int w, int h, int xbegin, int xend, int ybegin, int yend, out int cut_n_x, out int cut_n_y){
+// 'inout' key word variable is a reference
+void udpate_cut_range(int w, int h, inout int xbegin, inout int xend, inout int ybegin, inout int yend, out int cut_n_x, out int cut_n_y){
     int cut_x_min = 0;
 	int cut_x_max = (w & 0xFFFFFFFE) + FRAG_SIZE;
     // int cut_x_max = w + FRAG_SIZE;
@@ -181,10 +184,10 @@ void udpate_cut_range(int w, int h, int xbegin, int xend, int ybegin, int yend, 
 	}
 	else {
         
-		xbegin = CLAMP(xbegin, cut_x_min, cut_x_max);
-		xend = CLAMP(xend, cut_x_min, cut_x_max);
+		xbegin = clamp(xbegin, cut_x_min, cut_x_max);
+		xend = clamp(xend, cut_x_min, cut_x_max);
 
-		cut_n_x = MAX((xend - xbegin) / FRAG_SIZE + 1, 0);
+		cut_n_x = max((xend - xbegin) / FRAG_SIZE + 1, 0);
 	}
 
 	if (
@@ -196,43 +199,13 @@ void udpate_cut_range(int w, int h, int xbegin, int xend, int ybegin, int yend, 
 	}
 	else {
         
-		ybegin = CLAMP(ybegin, cut_y_min, cut_y_max);
-		yend = CLAMP(yend, cut_y_min, cut_y_max);
+		ybegin = clamp(ybegin, cut_y_min, cut_y_max);
+		yend = clamp(yend, cut_y_min, cut_y_max);
 
-		cut_n_y = MAX((yend - ybegin) / FRAG_SIZE + 1, 0);
+		cut_n_y = max((yend - ybegin) / FRAG_SIZE + 1, 0);
 	}
 }
 
-// void make_intersection_shared_to_reg(int side, uint curve_type, uint shared_index, out float cv0, out float cv1, out float cv2, out float cv3){
-//     switch(curve_type){
-//         case LINE:{
-//             cv0 = _shared.point_coords[SHARED_MAP(side * 4 + 0)];
-//             cv1 = _shared.point_coords[SHARED_MAP(side * 4 + 1)];
-//             break;
-//         }
-//         case QUADRIC:{
-//             cv0 = _shared.point_coords[SHARED_MAP(side * 4 + 0)];
-//             cv1 = _shared.point_coords[SHARED_MAP(side * 4 + 1)];
-//             cv2 = _shared.point_coords[SHARED_MAP(side * 4 + 2)];
-//             break;
-//         }
-//         case CUBIC:{
-//             cv0 = _shared.point_coords[SHARED_MAP(side * 4 + 0)];
-//             cv1 = _shared.point_coords[SHARED_MAP(side * 4 + 1)];
-//             cv2 = _shared.point_coords[SHARED_MAP(side * 4 + 2)];
-//             cv3 = _shared.point_coords[SHARED_MAP(side * 4 + 3)];
-//             break;
-//         }
-//         case ARC:{
-//             cv0 = _shared.point_coords[SHARED_MAP(side * 4 + 0)];
-//             cv1 = _shared.point_coords[SHARED_MAP(side * 4 + 1)];
-//             cv2 = _shared.point_coords[SHARED_MAP(side * 4 + 2)];
-//             break;
-//         }
-//         default:break;
-        
-//     }
-// }
 // ------------------------------------------------------
 
 void main(){
@@ -318,8 +291,8 @@ void main(){
         int n_x = cut_n_x, n_y = cut_n_y;
         int n_loop = n_x + n_y + 1;
 
-        float x = float(dx < 0.0f ? xend : xbegin);
-		float y = float(dy < 0.0f ? yend : ybegin);
+        float x = float(dx < 0 ? xend : xbegin);
+		float y = float(dy < 0 ? yend : ybegin);
 
         _shared.point_coords[SHARED_MAP(8)] = t0_ms;    // tx
         _shared.point_coords[SHARED_MAP(9)] = t0_ms;    // ty
@@ -351,7 +324,7 @@ void main(){
 				}
 				else {
 					side = 0;
-					n_x--;
+					--n_x;
 					c = x; x += dx;
 				}
 			}
@@ -400,7 +373,7 @@ void main(){
 					float x0 = _shared.point_coords[SHARED_MAP(side * 4 + 0)];
 					float x1 = _shared.point_coords[SHARED_MAP(side * 4 + 1)];
                     float a = x1 - x0;
-                    a = (a != 0.0f? (1.0f / a) : 0.0f);
+                    a = (a != 0? (1.0f / a) : 0.0f);
 					t_solve = min(max((c - x0) * a, t_min), t1_ms);
 				}
 				else if (c_type == QUADRIC) {
@@ -430,7 +403,6 @@ void main(){
 						float raw_t0 = t0;
 						float last_vtm = 0.f;
 
-#define CUBIC_ITERATION_NUMBER 24
 						for (int jiter = 0; jiter < CUBIC_ITERATION_NUMBER; ++jiter) {
 
 							float tm = (t0 + t1) * .5f;

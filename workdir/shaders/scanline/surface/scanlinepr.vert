@@ -36,10 +36,10 @@ void main() {
 
 	pos.y += 1;
 
-    vec2 vp_size = vec2(1200.0f, 1024.0f);
+    ivec2 vp_size = ivec2(1200, 1024);
 
-	pos.x = pos.x / vp_size.x * 2 - 1.0;
-	pos.y = pos.y / vp_size.y * 2 - 1.0;
+	pos.x = pos.x / float(vp_size.x) * 2 - 1.0;
+	pos.y = pos.y / float(vp_size.y) * 2 - 1.0;
 
 	pos.y = -pos.y;
 

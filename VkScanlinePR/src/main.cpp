@@ -3,7 +3,6 @@
 #include <iostream>
 #include "windows.h"
 
-#include<glm/glm.hpp>
 std::shared_ptr<VGApplication> app;
 
 int main(void) {

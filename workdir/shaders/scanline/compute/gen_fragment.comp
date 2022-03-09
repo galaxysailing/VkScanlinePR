@@ -6,14 +6,8 @@ layout (local_size_x = BLOCK_SIZE) in;
 
 #define MAX(a, b) (((a)>(b))?(a):(b))
 #define MIN(a, b) (((a)<(b))?(a):(b))
-#define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
-
-// fragment data offset
-#define FD_POS(i) (i)
-#define FD_SORT_INDEX(i) ((i) + stride_fragments)
-#define FD_PATH_IDX(i) ((i) + stride_fragments * 2)
-#define FD_SORT_SEGMENT(i) ((i) + stride_fragments * 3)
-#define FD_SCAN_WN(i) ((i) + stride_fragments * 4)
+// #define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
+#define LERP(a, b, t) ((a) + (t)*((b)-(a)))
 
 #define LINE 0x02
 #define QUADRIC 0x03
@@ -57,7 +51,7 @@ layout(std430, binding = 5) buffer FragmentData{
 
 // ------------------------- helper ---------------------------
 vec2 curve_interpolate(uint curve_type, float t, in vec2 cv0, in vec2 cv1, in vec2 cv2, in vec2 cv3){
-    vec2 res = vec2(0.0f, 0.0f);
+    vec2 res = cv0;
     switch(curve_type){
         case LINE:{
             res = LERP(cv0, cv1, t);
@@ -90,17 +84,20 @@ vec2 curve_interpolate(uint curve_type, float t, in vec2 cv0, in vec2 cv1, in ve
 void main(){
     uint fidx = gl_WorkGroupID.x * BLOCK_SIZE + gl_LocalInvocationID.x;
     int n_fragments = push_consts.n_fragments;
-    int stride_fragments = push_consts.stride_fragments;
     if (fidx >= n_fragments){ 
 		return;
     }
+    int stride_fragments = push_consts.stride_fragments;
+    int width = push_consts.width, height = push_consts.height;
     ivec2 cidx_t0 = intersection[fidx];
-    ivec2 cidx_t1 = (fidx + 1) != n_fragments?intersection[fidx + 1] : ivec2(-1, 0x3f800000);
+    ivec2 cidx_t1 = (fidx + 1) != n_fragments ? intersection[fidx + 1] : ivec2(-1, 0x3f800000);
 
     float t0 = intBitsToFloat(cidx_t0.y & 0xFFFFFFFC);
     float t1 = intBitsToFloat(cidx_t1.y & 0xFFFFFFFC);
-    t0 = MAX(t0, 0.0f);
-    t1 = MAX(t1, 0.0f);
+    // t0 = max(t0, 0.0f);
+    // t1 = max(t1, 0.0f);
+    if (t0 < 0) { t0 = 0.f; }
+	if (t1 < 0) { t1 = 0.f; }
 
     int inte_flag0 = cidx_t0.y & 1;
     int inte_flag1 = cidx_t1.y & 1;
@@ -113,7 +110,7 @@ void main(){
         t1 = 1.0f;
     }
 
-    int scan_winding_numer = 0;
+    int scan_winding_number = 0;
     int winding_number_change = 0;
     if(t0 < t1){
         uint ct_idx = (cidx >> 2);
@@ -164,30 +161,55 @@ void main(){
         sf = inte_flag0;
         sl = inte_flag1;
 
-        int raw_frag_x = int((pf.x + pl.x) * 0.5f / 2) * 2;
-        int raw_frag_y = int((pf.y + pl.y) * 0.5f / 2) * 2;
+        int raw_frag_x = int(((pf.x + pl.x) * 0.5f) / FRAG_SIZE) * FRAG_SIZE;
+        int raw_frag_y = int(((pf.y + pl.y) * 0.5f) / FRAG_SIZE) * FRAG_SIZE;
 
-        int pos_x = MIN(MAX(raw_frag_x, -FRAG_SIZE), int((push_consts.width & 0xFFFFFFFE) + 2));
-        int pos_y = MIN(MAX(raw_frag_y, -FRAG_SIZE), int((push_consts.height & 0xFFFFFFFE) + 2));
+        // int pos_x = clamp(raw_frag_x, -FRAG_SIZE, int((width & 0xFFFFFFFE) + FRAG_SIZE));
+        // int pos_y = clamp(raw_frag_y, -FRAG_SIZE, int((height & 0xFFFFFFFE) + FRAG_SIZE));
+
+        int pos_x = min(max(raw_frag_x, -FRAG_SIZE), int((width & 0xFFFFFFFE) + FRAG_SIZE));
+        int pos_y = min(max(raw_frag_y, -FRAG_SIZE), int((height & 0xFFFFFFFE) + FRAG_SIZE));
 
         int y_shift = ((pos_y + 0x7FFF) << 16);
         int x_shift = ((pos_x + 0x7FFF) & 0xFFFF);
 
-        if(uint(raw_frag_y) < uint(push_consts.height)){
+
+        // ---------- original version ------------------
+        if(uint(raw_frag_y) < uint(height)){
             yx = y_shift | x_shift;
         }
         int wn_y = pos_y + 1;
 
-        scan_winding_numer = 0;
+        scan_winding_number = 0;
         if(pf.y == pl.y){
-            scan_winding_numer = 0;
+            scan_winding_number = 0;
         }else{
             if(pf.y <= wn_y && wn_y < pl.y){
-                scan_winding_numer = -1;
+                scan_winding_number = -1;
             }else if(pl.y <= wn_y && wn_y < pf.y){
-                scan_winding_numer = 1;
+                scan_winding_number = 1;
             }
         }
+        // ---------------------------------------------
+
+
+        // if(uint(raw_frag_y) < uint(height)){
+        //     yx = y_shift | x_shift;
+        //     int wn_y = pos_y + 1;
+
+        //     scan_winding_number = 0;
+        //     if(pf.y == pl.y){
+        //         scan_winding_number = 0;
+        //     }else{
+        //         if(pf.y <= wn_y && wn_y < pl.y){
+        //             scan_winding_number = -1;
+        //         }else if(pl.y <= wn_y && wn_y < pf.y){
+        //             scan_winding_number = 1;
+        //         }
+
+        //     }
+        // }
+        
 
         // TODO gen stencil mask
     }
@@ -208,10 +230,10 @@ void main(){
 	| sf * 9  | -     | -
 	| sf * 10 | -     | scan segment
 	*/
-    fragment_data[FD_POS(fidx)] = yx;
-    fragment_data[FD_SORT_INDEX(fidx)] = int(fidx);
-    fragment_data[FD_PATH_IDX(fidx)] = int(path_idx) | winding_number_change << 30;
-    fragment_data[FD_SCAN_WN(fidx)] = scan_winding_numer;
+    fragment_data[fidx + stride_fragments * 0] = yx;
+    fragment_data[fidx + stride_fragments * 1] = int(fidx);
+    fragment_data[fidx + stride_fragments * 2] = int(path_idx) | winding_number_change << 30;
+    fragment_data[fidx + stride_fragments * 4] = scan_winding_number;
 
     // sort segment
     if(cidx_t0.x != cidx_t1.x){
@@ -222,14 +244,14 @@ void main(){
             path_idx1 = push_consts.n_paths;
         }
         for (uint j = path_idx + 1; j <= path_idx1; ++j) {
-			fragment_data[FD_SORT_SEGMENT(j)] = int(fidx + 1);
+			fragment_data[j + stride_fragments * 3] = int(fidx + 1);
 		}
     }
 
     if(fidx == 0){
         fragment_data[n_fragments] = -1;
         for(int j = 0; j <= path_idx; ++j){
-            fragment_data[FD_SORT_SEGMENT(j)] = 0;
+            fragment_data[j + stride_fragments * 3] = 0;
         }
     }
 

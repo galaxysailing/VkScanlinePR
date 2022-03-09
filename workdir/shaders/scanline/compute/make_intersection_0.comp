@@ -147,7 +147,7 @@ void get_xy_begin_end(vec2 p0, vec2 p1, out int xbegin, out int xend, out int yb
 }
 
 // 'out' key word will let variable become 0
-void udpate_cut_range(int w, int h, int xbegin, int xend, int ybegin, int yend, out int cut_n_x, out int cut_n_y){
+void udpate_cut_range(int w, int h, inout int xbegin, inout int xend, inout int ybegin, inout int yend, out int cut_n_x, out int cut_n_y){
     int cut_x_min = 0;
 	int cut_x_max = (w & 0xFFFFFFFE) + FRAG_SIZE;
     // int cut_x_max = w + FRAG_SIZE;

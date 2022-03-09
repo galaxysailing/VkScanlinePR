@@ -342,7 +342,7 @@ void ScanlineVGRasterizer::drawFrame()
     VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &make_inte_0_submit, VK_NULL_HANDLE));
     wait_compute = k_make_inte_0.semaphore;
 
-    drawDebug();
+    //drawDebug();
 
     uint32_t n_curves = _compute.curve_input.n_curves;
     int32_t n_fragments = 0;
@@ -379,7 +379,6 @@ void ScanlineVGRasterizer::drawFrame()
     }
     _c.n_fragments = n_fragments;
     
-    drawDebug();
 
     // make intersection 1
     int32_t stride_fragments = (n_fragments + 256) & -256;
@@ -474,6 +473,9 @@ void ScanlineVGRasterizer::drawFrame()
     VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &seg_sort_submit, VK_NULL_HANDLE));
     wait_compute = k_seg_sort.semaphore;
 
+    //drawDebug();
+    
+
     // shuffle fragment
     write_desc_sets = {
         PUSH_SB_WRITE_DESC_SET(0, &_csb.fragment_data->desc.buf_info)
@@ -516,6 +518,8 @@ void ScanlineVGRasterizer::drawFrame()
         wait_compute = k_scan.semaphore;
         VK_CHECK_RESULT(vkQueueWaitIdle(_compute.queue));
     }
+
+    drawDebug();
 
     // mark_merged_fragment_and_span
     write_desc_sets = {
@@ -700,7 +704,7 @@ void ScanlineVGRasterizer::drawFrame()
 
 void ScanlineVGRasterizer::drawDebug()
 {
-    auto save_data = [&](const std::string& kv_file) {
+    auto save_data = [&](const std::string& kv_file, int ind) {
         std::ofstream fin;
         fin.open(kv_file);
         if (!fin.is_open()) {
@@ -708,11 +712,20 @@ void ScanlineVGRasterizer::drawDebug()
         }
         int* ptr = _compute.storage_buffers.fragment_data->cptr();
         for (int i = 0; i <= _compute.n_fragments; ++i) {
+            switch (ind) {
+            case 1:
+                fin << ptr[i] << "," << ptr[_compute.stride_fragments + i] << "," << ptr[_compute.stride_fragments * 3 + i] << "\n";
+                break;
+            case 2:
+                fin << ptr[_compute.stride_fragments * 3 + i] << "\n";
+                break;
+            }
             //printf("%d,%d\n", ptr[0 * _compute.stride_fragments + i], ptr[_compute.stride_fragments + i]);
-            fin << ptr[i] << "," << ptr[_compute.stride_fragments + i] << "\n";
         }
         fin.close();
     };
+    //save_data("kv.out", 1);
+    //save_data("segments.out", 2);
     // for point debug
     //vec2* ptr = _compute.storage_buffers.transformed_pos->cptr();
     //printf("-------------------- begin --------------------\n");
@@ -1145,6 +1158,11 @@ void ScanlineVGRasterizer::prepareComputeBuffers()
     _c.trans_pos_in.m1 = vec4(0, 1, 0, 0);
     _c.trans_pos_in.m2 = vec4(0, 0, 1, 0);
     _c.trans_pos_in.m3 = vec4(0, 0, 0, 1);
+
+    //_c.trans_pos_in.m0 = vec4(17.789654, 0, 0, -815.924683);
+    //_c.trans_pos_in.m1 = vec4(0, 17.789654, 0, -16161.220703);
+    //_c.trans_pos_in.m2 = vec4(0, 0, 1, 0);
+    //_c.trans_pos_in.m3 = vec4(0, 0, 0, 1);
 
     //_c.trans_pos_in.m0 = vec4(1.03434348, 0, 0, 204.363617);
     //_c.trans_pos_in.m1 = vec4(0, 1.03434348, 0, 0);

@@ -45,14 +45,11 @@ void main() {
     op.z = dot(ip, ubo.m2);
     op.w = dot(ip, ubo.m3);
 
-    // float w_inv = 1.0f / op.w;
+    float w_inv = 1.0f / op.w;
 
-    // op.x *= w_inv;
-    // op.y *= w_inv;
-    // op.z *= w_inv;
-    op.x /= op.w;
-    op.y /= op.w;
-    op.z /= op.w;
+    op.x *= w_inv;
+    op.y *= w_inv;
+    op.z *= w_inv;
 
     // path visible flag:
 	//
