@@ -25,7 +25,7 @@ void main() {
 	// w: frag_index / 0
 	ivec4 draw = texelFetch(tb_index, index);
 
-	path_frag_pos = ivec2(draw.x & 0xFFFF, (draw.x >> 16) & 0xFFFF);
+	path_frag_pos = ivec2(draw.x & 0xFFFF, draw.x >> 16);
 
 	vec2 pos = vec2(
 		path_frag_pos.x + line_vi * draw.y,
@@ -48,4 +48,4 @@ void main() {
 	//pixel_mask = (draw.w == 0) ?
 	//	ivec4(0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF)
 	//	: texelFetch(tb_stencil_mask, draw.w - 1);
-}
+} 

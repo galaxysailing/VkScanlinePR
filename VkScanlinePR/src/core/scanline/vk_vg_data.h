@@ -18,7 +18,7 @@ struct VkVGInputCurveData{
 
 	// curve
 	VULKAN_BUFFER_PTR(uint32_t) curve_position_map;
-	VULKAN_BUFFER_PTR(uint8_t) curve_type;
+	VULKAN_BUFFER_PTR(uint32_t) curve_type;
 	VULKAN_BUFFER_PTR(uint32_t) curve_path_idx;
 
 	// numbers
@@ -28,7 +28,7 @@ struct VkVGInputCurveData{
 };
 
 struct VkVGInputPathData {
-	VULKAN_BUFFER_PTR(uint8_t) fill_rule;
+	VULKAN_BUFFER_PTR(uint32_t) fill_rule;
 	VULKAN_BUFFER_PTR(uint32_t) fill_info;
 
 	uint32_t n_paths;

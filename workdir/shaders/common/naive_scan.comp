@@ -32,13 +32,17 @@ void main(){
 
     if(thid == 0){
         shared_data[BATCH_SIZE << 1] = 0;
+        // memoryBarrierShared();
+        memoryBarrier();
     }
-    _SYNC_();
+    barrier();
 
     for(int bidx = 0; bidx <= batch_number; ++bidx){
 
         shared_data[pout * BATCH_SIZE + thid] = ((thid > 0) ? data_input[DATA_MAP(thid - 1)] : shared_data[BATCH_SIZE << 1]);
-        _SYNC_();
+        // memoryBarrierShared();
+        memoryBarrier();
+        barrier();
 
         for(int offset = 1; offset < BATCH_SIZE; offset <<= 1){
             pout = 1 - pout;
@@ -49,19 +53,22 @@ void main(){
             }else{
                 shared_data[pout * BATCH_SIZE + thid] = shared_data[pin * BATCH_SIZE + thid - offset] + shared_data[pin * BATCH_SIZE + thid];
             }
-            _SYNC_();
+            // memoryBarrierShared();
+            memoryBarrier();
+            barrier();
         }
 
         if(thid == BATCH_SIZE - 1){
             shared_data[BATCH_SIZE << 1] = shared_data[pout * BATCH_SIZE + thid];
+            // memoryBarrierShared();
+            memoryBarrier();
         }else{
             if(bidx != batch_number - 1 || DATA_MAP(thid) <= n){
                 // data_output[DATA_MAP(thid)] = shared_data[pout * BATCH_SIZE + thid];
                 atomicExchange(data_output[DATA_MAP(thid)], shared_data[pout * BATCH_SIZE + thid]);
-                groupMemoryBarrier();
+                // groupMemoryBarrier();
             }
         }
-        
-        _SYNC_();
+        barrier();
     }
 }

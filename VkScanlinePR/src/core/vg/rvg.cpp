@@ -107,6 +107,7 @@ void RVG::parse_paths(std::ifstream& fin)
 
 		return v;
 	};
+	int last_path_vertex_number = -1;
 
 	// process each path loop
 	while (fin >> tstr) {
@@ -117,8 +118,10 @@ void RVG::parse_paths(std::ifstream& fin)
 			getline(fin, tstr);
 			continue;
 		}
-		
-		vg.newPath();
+		if (last_path_vertex_number != vg.pointData.pos.size()) {
+			last_path_vertex_number = vg.pointData.pos.size();
+			vg.newPath();
+		}
 		//printf("path idx %d begin\n", vg.pathData.pathIndex);
 
 		assert(tstr == "1");
@@ -147,6 +150,11 @@ void RVG::parse_paths(std::ifstream& fin)
 		read_point();
 
 		glm::vec2 p[4];
+
+		int path_vertex_begin = vg.pointData.pos.size();
+		int contour_vertex_begin = path_vertex_begin;
+		bool closed = false;
+
 		// process curve
 		while (fin >> tstr) {
 			if (tstr != "fL" && tstr.length() != 1) {
@@ -165,6 +173,8 @@ void RVG::parse_paths(std::ifstream& fin)
 			switch (cmd) {
 			case 'M':
 				p[0] = read_point();
+				contour_vertex_begin = vg.pointData.pos.size();
+				closed = false;
 				break;
 			case 'L':
 				p[1] = read_point();
@@ -181,6 +191,7 @@ void RVG::parse_paths(std::ifstream& fin)
 				p[0] = p[3];
 				break;
 			case 'Z':
+				closed = true;
 				break;
 			default: 
 				if (tstr == "fL") {
@@ -189,6 +200,26 @@ void RVG::parse_paths(std::ifstream& fin)
 				break;
 
 			}
+		}
+
+		//if (vg.pointData.pos.size() == path_vertex_begin) {
+		//	getline(fin, tstr);
+		//	continue;
+		//}
+
+		// close path
+		if (!closed && vg.pointData.pos.size() > contour_vertex_begin) {
+			// add a straight line.
+			glm::vec2 p_first = vg.pointData.pos[contour_vertex_begin];
+			glm::vec2 p_last = vg.pointData.pos.back();
+
+			if (p_first != p_last) {
+				vg.newCurve();
+				p[0] = p_last;
+				p[1] = p_first;
+				vg.addCurve(CurveType::LINE, p);
+			}
+
 		}
 
 		assert(tstr == "dyn_identity");

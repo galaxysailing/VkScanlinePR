@@ -12,4 +12,4 @@ void main() {
 
 	// int mask_index = in_frag_pos.x * 2 + in_frag_pos.y;
 	gl_SampleMask[0] = 0xFFFFFFFF;
-}
+} 

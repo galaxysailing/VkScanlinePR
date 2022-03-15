@@ -11,11 +11,11 @@ layout (push_constant) uniform PushConsts {
     layout(offset = 4)int seg_size;
 } push_consts;
 
-layout(std430, binding = 0) volatile buffer Keys{
+layout(std430, binding = 0) buffer Keys{
     int keys[];
 };
 
-layout(std430, binding = 1) volatile buffer Values{
+layout(std430, binding = 1) buffer Values{
     int values[];
 };
 
@@ -38,15 +38,19 @@ void main(){
     int kv_size = push_consts.kv_size;
     int segment_size = segments[seg_idx + 1] - segments[seg_idx];
     
+    if(segment_size <= 1){
+        return;
+    }
+
 #ifdef TEST
     keys[seg_idx] = segment_size;
     return;
 #endif
 
-    int batch_num = segment_size / (BATCH_SIZE * 2);
+    int batch_num = (segment_size - 1) / (BATCH_SIZE * 2);    
     int begin = segments[seg_idx];
     int flag = 1;
-    for(int i = 0;i < segment_size; ++i){
+    for(int i = 0; i < segment_size; ++i){
         flag = 1 - flag;
         for(int bidx = 0; bidx <= batch_num; ++bidx){
             int l_ind = begin + (bidx * BATCH_SIZE * 2 + thid * 2 + flag + 0);
@@ -67,21 +71,28 @@ void main(){
                 kl ^= kr;
                 kr ^= kl;
                 kl ^= kr;
-                // keys[l_ind] = kl;
-                // keys[r_ind] = kr;
-                atomicExchange(keys[l_ind], kl);
-                atomicExchange(keys[r_ind], kr);
+                // int tmp = kl;
+                // kl = kr;
+                // kr = tmp;
+                keys[l_ind] = kl;
+                keys[r_ind] = kr;
+                // atomicExchange(keys[l_ind], kl);
+                // atomicExchange(keys[r_ind], kr);
 
                 // swap value
                 vl ^= vr;
                 vr ^= vl;
                 vl ^= vr;
-                // values[l_ind] = vl;
-                // values[r_ind] = vr;
-                atomicExchange(values[l_ind], vl);
-                atomicExchange(values[r_ind], vr);
+                // tmp = vl;
+                // vl = vr;
+                // vr = tmp;
+                values[l_ind] = vl;
+                values[r_ind] = vr;
+                // atomicExchange(values[l_ind], vl);
+                // atomicExchange(values[r_ind], vr);
             }
         }
-        _SYNC_();
+        // memoryBarrierBuffer();
+        barrier();
     }
 }

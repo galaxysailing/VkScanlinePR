@@ -53,13 +53,14 @@ void main(){
 		int pidx_0 = fragment_data[2 * stride_fragments + fidx - 1] & 0x3FFFFFFF;
 		int pidx_1 = fragment_data[2 * stride_fragments + fidx] & 0x3FFFFFFF;
 
-		uint pfr_idx = (pidx_1 >> 2);
-        uint pfr_offset = (pidx_1 % 4) << 3;
-        // little end: 
-        // offset           0   1   2   3
-        // value            01  02  04  08
-        // result 32-bit:   0x08040201
-        uint fill_rule = ((path_fill_rule[pfr_idx] >> pfr_offset) & 0x000000FF);
+		// uint pfr_idx = (pidx_1 >> 2);
+        // uint pfr_offset = (pidx_1 % 4) << 3;
+        // // little end: 
+        // // offset           0   1   2   3
+        // // value            01  02  04  08
+        // // result 32-bit:   0x08040201
+        // uint fill_rule = ((path_fill_rule[pfr_idx] >> pfr_offset) & 0x000000FF);
+        uint fill_rule = path_fill_rule[pidx_1];
 
 		int yx_0 = fragment_data[fidx - 1];
         int x0 = (yx_0 & 0xFFFF) - 0x7FFF;

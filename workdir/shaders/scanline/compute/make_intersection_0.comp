@@ -6,8 +6,8 @@ layout (local_size_x = BLOCK_SIZE) in;
 
 #define SHARED_MAP(i) (shared_index + (i) * BLOCK_SIZE)
 #define CUT_POINT_MAP(i) (5 * i)
-#define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
-// #define LERP(a, b, t) ((a) + (t)*((b)-(a)))
+// #define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
+#define LERP(a, b, t) ((a) + (t)*((b)-(a)))
 #define MAX(a, b) (((a)>(b))?(a):(b))
 #define MIN(a, b) (((a)<(b))?(a):(b))
 #define CLAMP(v, mi, ma) (MIN(ma, MAX(v, mi))) 
@@ -70,29 +70,61 @@ shared struct {
 
 int float2int_rd(float x){
     return x >= 0.0f?int(x):int(x - 1.0f);
+    // return int(floor(x));
 }
 
 void solveQuadEquation(float a, float b, float c, out float r0, out float r1){
-    if(a == 0.0f){
-        r0 = r1 = -c / b;
-        return;
-    }
-    float half_b = 0.5f * b;
+    // if(a == 0.0f){
+    //     r0 = r1 = -c / b;
+    //     return;
+    // }
+    // float half_b = 0.5f * b;
 
-    float delta = half_b * half_b - a * c;
-    if(delta < 0.0f){
-        r0 = r1 = 0.0f;
-        return;
-    }
+    // float delta = half_b * half_b - a * c;
+    // if(delta < 0.0f){
+    //     r0 = r1 = 0.0f;
+    //     return;
+    // }
     // else if(delta == 0.0f){
     //     r0 = r1 = -b / (2.0f * a);
     //     return;
     // }
 
-    float s_delta = sqrt(delta);
+    // float s_delta = sqrt(delta);
 
-    r0 = -(half_b + s_delta) / a;
-    r1 = (-half_b + s_delta) / a;
+    // r0 = -(half_b + s_delta) / a;
+    // r1 = (-half_b + s_delta) / a;
+
+    if (a == 0) {
+		float x = -c / b;
+		r0 = x;
+		r1 = x;
+		return;
+	}
+
+	float A = a;
+	float B = b * 0.5;
+	float C = c;
+	vec2 tc;
+
+	float R = B*B - A*C;
+	if (R > 0.0f) {
+		float SR = sqrt(R);
+		if (B > 0.0f) {
+			float TB = B + SR;
+			tc = vec2(-C / TB, -TB / A);
+		}
+		else { // B<0
+			float TB = -B + SR;
+			tc = vec2(TB / A, C / TB);
+		}
+	}
+	else {
+		tc = vec2(0.f, 0.f);
+	}
+
+	r0 = tc.x;
+	r1 = tc.y;
     
 }
 
@@ -132,21 +164,21 @@ float interpolateGeneralCurve(uint curve_type, float t, uint shared_index, uint 
     return res;
 }
 
-void get_xy_begin_end(vec2 p0, vec2 p1, out int xbegin, out int xend, out int ybegin, out int yend){
+void get_xy_begin_end(inout vec2 p0, inout vec2 p1, out int xbegin, out int xend, out int ybegin, out int yend){
     if(p0.x <= p1.x) {
-        xbegin = int(float2int_rd(p0.x / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
-        xend = int(float2int_rd(p1.x / FRAG_SIZE) * FRAG_SIZE);
+        xbegin = int(floor(p0.x / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
+        xend = int(floor(p1.x / FRAG_SIZE) * FRAG_SIZE);
     } else {
-        xbegin = int(float2int_rd(p1.x / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
-        xend = int(float2int_rd(p0.x / FRAG_SIZE) * FRAG_SIZE);
+        xbegin = int(floor(p1.x / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
+        xend = int(floor(p0.x / FRAG_SIZE) * FRAG_SIZE);
     }
 
     if(p0.y <= p1.y) {
-        ybegin = int(float2int_rd(p0.y / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
-        yend = int(float2int_rd(p1.y / FRAG_SIZE) * FRAG_SIZE);
+        ybegin = int(floor(p0.y / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
+        yend = int(floor(p1.y / FRAG_SIZE) * FRAG_SIZE);
     } else {
-        ybegin = int(float2int_rd(p1.y / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
-        yend = int(float2int_rd(p0.y / FRAG_SIZE) * FRAG_SIZE);
+        ybegin = int(floor(p1.y / FRAG_SIZE) * FRAG_SIZE) + FRAG_SIZE;
+        yend = int(floor(p0.y / FRAG_SIZE) * FRAG_SIZE);
     }
 }
 
@@ -154,10 +186,8 @@ void get_xy_begin_end(vec2 p0, vec2 p1, out int xbegin, out int xend, out int yb
 void udpate_cut_range(int w, int h, inout int xbegin, inout int xend, inout int ybegin, inout int yend, out int cut_n_x, out int cut_n_y){
     int cut_x_min = 0;
 	int cut_x_max = (w & 0xFFFFFFFE) + FRAG_SIZE;
-    // int cut_x_max = w + FRAG_SIZE;
 	int cut_y_min = 0;
 	int cut_y_max = (h & 0xFFFFFFFE) + FRAG_SIZE;
-    // int cut_y_max = h + FRAG_SIZE;
 	// width, height: 1200, 1024
 	// cut_x_max, cut_y_max: 1202, 1026
 
@@ -203,13 +233,14 @@ void main() {
 
     uint poidx = curve_pos_map[cidx];
 
-    uint ct_idx = (cidx >> 2);
-    uint ct_offset = (cidx % 4) << 3;
+    // uint ct_idx = (cidx >> 2);
+    // uint ct_offset = (cidx % 4) << 3;
     // little end: 
     // offset           0   1   2   3
     // value            01  02  04  08
     // result 32-bit:   0x08040201
-    uint c_type = ((curve_type[ct_idx] >> ct_offset) & 0x000000FF);
+    // uint c_type = ((curve_type[ct_idx] >> ct_offset) & 0x000000FF);
+    uint c_type = curve_type[cidx];
     
 // #define TEST
 #ifdef TEST

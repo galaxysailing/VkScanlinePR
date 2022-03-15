@@ -30,36 +30,9 @@
 #define PUSH_SB_WRITE_DESC_SET(binding, buf_info) vk::initializer::writeDescriptorSet(0, DESC_TYPE_SB, binding, buf_info)
 #define PUSH_UB_WRITE_DESC_SET(binding, buf_info) vk::initializer::writeDescriptorSet(0, DESC_TYPE_UB, binding, buf_info)
 
+//#define MOCK_DATA
+
 inline int divup(int a, int b) { return (a + (b - 1)) / b; }
-
-inline uint32_t float_as_uint(float a) {
-    union X {
-        float a;
-        uint32_t b;
-    };
-    X x;
-    x.a = a;
-    return x.b;
-}
-
-inline float int_as_float(int a) {
-    union X {
-        int a;
-        float b;
-    };
-    X x;
-    x.a = a;
-}
-
-
-inline float uint_as_float(uint32_t a) {
-    union X {
-        uint32_t a;
-        float b;
-    };
-    X x;
-    x.a = a;
-}
 
 namespace Galaxysailing {
 
@@ -114,14 +87,14 @@ void ScanlineVGRasterizer::loadVG(std::shared_ptr<VGContainer> vg_input)
 
     // curve
     vector<uint32_t> curve_pos_map;
-    vector<uint8_t> curve_type;
+    vector<uint32_t> curve_type;
     vector<uint32_t> curve_path_idx;
     //curve_pos_map.reserve(n_curves + 1);
     curve_type.reserve(n_curves);
     curve_path_idx.reserve(n_curves);
 
     // path
-    vector<uint8_t> path_fill_rule;
+    vector<uint32_t> path_fill_rule;
     vector<uint32_t> path_fill_info;
     path_fill_rule.reserve(n_paths);
     path_fill_info.reserve(n_paths);
@@ -145,7 +118,7 @@ void ScanlineVGRasterizer::loadVG(std::shared_ptr<VGContainer> vg_input)
         path_fill_info.push_back(c);
 
         // process fill rule
-        path_fill_rule.push_back(static_cast<uint8_t>(path.fillRule[pi]));
+        path_fill_rule.push_back(static_cast<uint32_t>(path.fillRule[pi]));
 
         for (uint32_t ci = curve_begin; ci < curve_end; ++ci) {
             uint32_t curve_idx = ci;
@@ -153,7 +126,7 @@ void ScanlineVGRasterizer::loadVG(std::shared_ptr<VGContainer> vg_input)
             uint32_t point_end = (ci != n_curves - 1 ? curve.posIndices[ci + 1] : n_points);
             curve_path_idx.push_back(path_idx);
             curve_pos_map.push_back(point_begin);
-            curve_type.push_back(static_cast<uint8_t>(curve.curveType[ci]));
+            curve_type.push_back(static_cast<uint32_t>(curve.curveType[ci]));
             for (uint32_t poi = point_begin; poi < point_end; ++poi) {
                 position.push_back(point.pos[poi]);
                 pos_path_idx.push_back(path_idx);
@@ -176,14 +149,14 @@ void ScanlineVGRasterizer::loadVG(std::shared_ptr<VGContainer> vg_input)
     _in_curve.position_path_idx = GPU_VULKAN_BUFFER(uint32_t);
 
     _in_curve.curve_position_map = GPU_VULKAN_BUFFER(uint32_t);
-    _in_curve.curve_type = GPU_VULKAN_BUFFER(uint8_t);
+    _in_curve.curve_type = GPU_VULKAN_BUFFER(uint32_t);
     _in_curve.curve_path_idx = GPU_VULKAN_BUFFER(uint32_t);
 
     _in_curve.n_curves = n_curves;
     _in_curve.n_points = n_points;
 
     _in_path.fill_info = GPU_VULKAN_BUFFER(uint32_t);
-    _in_path.fill_rule = GPU_VULKAN_BUFFER(uint8_t);
+    _in_path.fill_rule = GPU_VULKAN_BUFFER(uint32_t);
 
     _in_curve.position->set(position);
     _in_curve.position_path_idx->set(pos_path_idx);
@@ -275,7 +248,9 @@ void ScanlineVGRasterizer::getEnabledFeatures()
 void ScanlineVGRasterizer::prepareGraphics()
 {
     /// test
+#ifdef MOCK_DATA
     mockDataload();
+#endif
 
     prepareTexelBuffers();
     setupDescriptorPool();
@@ -285,7 +260,7 @@ void ScanlineVGRasterizer::prepareGraphics()
 }
 void ScanlineVGRasterizer::mockDataload() {
     std::ifstream fin;
-    fin.open("test_data.csv");
+    fin.open("test_data3.csv");
     if (!fin.is_open()) {
         throw std::runtime_error("mock data file open failed");
     }
@@ -298,14 +273,15 @@ void ScanlineVGRasterizer::mockDataload() {
         glm::ivec4 v;
         std::istringstream iss(tstr);
         iss >> v.x >> v.y >> v.z >> v.w;
-        if (v.w != 0) {
+        //if (v.w != 0) {
             outputIndex.push_back(v);
-        }
+        //}
     }
     std::cout << "load success\n";
 }
 void ScanlineVGRasterizer::drawFrame()
 {   
+#ifndef MOCK_DATA
     //vkWaitForFences(_device, 1, &_compute.fence, VK_TRUE, UINT64_MAX);
     VkSemaphore wait_compute;
     auto& k_scan = *(_kernal.scan);
@@ -327,7 +303,11 @@ void ScanlineVGRasterizer::drawFrame()
     // transform position
     std::vector<VkSemaphore> wait_sema = {};
     std::vector<VkSemaphore> signal_sema = {};
-    VkSubmitInfo transpos_submit = k_transform_pos.submitInfo(is_first_draw, wait_sema, signal_sema, wait_dst_stage_masks.data());
+    VkSubmitInfo transpos_submit = k_transform_pos.submitInfo(is_first_draw
+        , wait_sema
+        , signal_sema
+        , wait_dst_stage_masks.data()
+    );
     VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &transpos_submit, VK_NULL_HANDLE));
     wait_compute = k_transform_pos.semaphore;
 
@@ -335,7 +315,7 @@ void ScanlineVGRasterizer::drawFrame()
 
     // make intersection 0
     VkSubmitInfo make_inte_0_submit = k_make_inte_0.submitInfo(is_first_draw
-        , wait_sema = { k_transform_pos.semaphore }
+        , wait_sema = { wait_compute }
         , signal_sema = {}
         , wait_dst_stage_masks.data()
     );
@@ -372,13 +352,14 @@ void ScanlineVGRasterizer::drawFrame()
             , wait_dst_stage_masks.data()
         );
         VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &scan_submit, VK_NULL_HANDLE));
-        wait_compute = k_scan.semaphore;
-
         VK_CHECK_RESULT(vkQueueWaitIdle(_compute.queue));
         n_fragments = csb_curve_pixel_count[n_curves];
+        wait_compute = k_scan.semaphore;
     }
+
     _c.n_fragments = n_fragments;
     
+     drawDebug();
 
     // make intersection 1
     int32_t stride_fragments = (n_fragments + 256) & -256;
@@ -403,7 +384,7 @@ void ScanlineVGRasterizer::drawFrame()
 	};
 	k_make_inte_1.beginCmdBuffer(true)
 		->cmdPushDescSet(write_desc_sets)
-		->cmdDispatch(divup(_compute.curve_input.n_curves, BLOCK_SIZE))
+		->cmdDispatch(divup(n_curves, BLOCK_SIZE))
 		->endCmdBuffer();
 	VkSubmitInfo make_inte_1_submit = k_make_inte_1.submitInfo(is_first_draw
 		, wait_sema = { wait_compute }
@@ -496,13 +477,18 @@ void ScanlineVGRasterizer::drawFrame()
 
     // exclusive scan
     {
-        VkDescriptorBufferInfo desc;
-        desc.offset = 3 * stride_fragments * sizeof(int32_t);
-        desc.buffer = _csb.fragment_data->buffer();
-        desc.range = n_fragments * sizeof(int32_t);
+        VkDescriptorBufferInfo input_desc, output_desc;
+        input_desc.offset = 3 * stride_fragments * sizeof(int32_t);
+        input_desc.buffer = _csb.fragment_data->buffer();
+        input_desc.range = n_fragments * sizeof(int32_t);
+
+        output_desc.offset = 3 * stride_fragments * sizeof(int32_t);
+        output_desc.buffer = _csb.fragment_data->buffer();
+        output_desc.range = (n_fragments + 1) * sizeof(int32_t);
+
         write_desc_sets = {
-            PUSH_SB_WRITE_DESC_SET(0, &desc),
-            PUSH_SB_WRITE_DESC_SET(1, &desc)
+            PUSH_SB_WRITE_DESC_SET(0, &input_desc),
+            PUSH_SB_WRITE_DESC_SET(1, &output_desc)
         };
         k_scan.beginCmdBuffer(true)
             ->cmdPushDescSet(write_desc_sets)
@@ -519,7 +505,7 @@ void ScanlineVGRasterizer::drawFrame()
         VK_CHECK_RESULT(vkQueueWaitIdle(_compute.queue));
     }
 
-    drawDebug();
+    //drawDebug();
 
     // mark_merged_fragment_and_span
     write_desc_sets = {
@@ -536,7 +522,7 @@ void ScanlineVGRasterizer::drawFrame()
         ->endCmdBuffer();
     VkSubmitInfo mark_merge_submit = k_mark_merged_fragment_and_span.submitInfo(is_first_draw
         , wait_sema = { wait_compute }
-        , signal_sema = {}
+        , signal_sema = { }
         , wait_dst_stage_masks.data()
     );
     VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &mark_merge_submit, VK_NULL_HANDLE));
@@ -620,10 +606,10 @@ void ScanlineVGRasterizer::drawFrame()
     );
     VK_CHECK_RESULT(vkQueueSubmit(_compute.queue, 1, &gen_fs_submit, VK_NULL_HANDLE));
     wait_compute = k_gen_merged_fragment_and_span.semaphore;
-
+#endif
     // Submit graphics commands
     _Base::prepareFrame();
-    
+#ifndef MOCK_DATA
     VkCommandBufferBeginInfo cmdBufInfo = vk::initializer::commandBufferBeginInfo();
     cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     VK_CHECK_RESULT(vkBeginCommandBuffer(_drawCmdBuffers[_currentBuffer], &cmdBufInfo));
@@ -678,14 +664,21 @@ void ScanlineVGRasterizer::drawFrame()
     //addGraphicsToComputeBarriers(drawCmdBuffers[i]);
 
     VK_CHECK_RESULT(vkEndCommandBuffer(_drawCmdBuffers[_currentBuffer]));
+#endif
 
     std::array<VkPipelineStageFlags,2> waitDstStageMask = {
         VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
     };
+#ifdef MOCK_DATA
+    std::array<VkSemaphore, 1> waitSemaphores = {
+        _semaphores.presentComplete
+    };
+#else
     std::array<VkSemaphore, 2> waitSemaphores = {
         _semaphores.presentComplete
         , wait_compute
     };
+#endif
     std::array<VkSemaphore, 1> signalSemaphores = {
         _semaphores.renderComplete
     };
@@ -811,6 +804,8 @@ void ScanlineVGRasterizer::drawDebug()
 void ScanlineVGRasterizer::prepareTexelBuffers()
 {
 	// Vertex shader uniform buffer block
+
+#ifdef MOCK_DATA
     _vulkanDevice->createBuffer(
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -820,7 +815,7 @@ void ScanlineVGRasterizer::prepareTexelBuffers()
     VK_CHECK_RESULT(graphics.outputIndexBuffer.createBufferView(VK_FORMAT_R32G32B32A32_SINT, VK_WHOLE_SIZE));
 
     graphics.outputIndexBuffer.copyTo(outputIndex.data(), sizeof(outputIndex[0]) * outputIndex.size());
-
+#endif
     // output merged fragment
     VkQueue queue = _presentQueue;
     VkBufferUsageFlags usage_flags = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
@@ -838,8 +833,8 @@ void ScanlineVGRasterizer::setupDescriptorPool()
         // test
         vk::initializer::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1),
         ///
-        vk::initializer::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 5),
-        vk::initializer::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2)
+        //vk::initializer::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 5),
+        //vk::initializer::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2)
     };
 
     VkDescriptorPoolCreateInfo descriptorPoolInfo =
@@ -856,24 +851,27 @@ void ScanlineVGRasterizer::setupLayoutsAndDescriptors()
     };
     VkDescriptorSetLayoutCreateInfo descriptorLayout =
         vk::initializer::descriptorSetLayoutCreateInfo(setLayoutBindings);
+#ifndef MOCK_DATA
     // use push cmd
     descriptorLayout.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+#endif
     VK_CHECK_RESULT(vkCreateDescriptorSetLayout(_device, &descriptorLayout, nullptr, &graphics.descriptorSetLayout));
 
     VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo =
         vk::initializer::pipelineLayoutCreateInfo(&graphics.descriptorSetLayout, 1);
     VK_CHECK_RESULT(vkCreatePipelineLayout(_device, &pipelineLayoutCreateInfo, nullptr, &graphics.pipelineLayout));
 
+#ifdef MOCK_DATA
     // Set
-    //VkDescriptorSetAllocateInfo allocInfo =
-    //    vk::initializer::descriptorSetAllocateInfo(_descriptorPool, &graphics.descriptorSetLayout, 1);
-    //VK_CHECK_RESULT(vkAllocateDescriptorSets(_device, &allocInfo, &graphics.descriptorSet));
+    VkDescriptorSetAllocateInfo allocInfo =
+        vk::initializer::descriptorSetAllocateInfo(_descriptorPool, &graphics.descriptorSetLayout, 1);
+    VK_CHECK_RESULT(vkAllocateDescriptorSets(_device, &allocInfo, &graphics.descriptorSet));
 
-    //std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
-    //    //vk::initializer::writeDescriptorSet(graphics.descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 0, &graphics.outputIndexBuffer.bufferView)
-    //    vk::initializer::writeDescriptorSet(graphics.descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 0, &graphics.output_buf_view)
-    //};
-    //vkUpdateDescriptorSets(_device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
+        vk::initializer::writeDescriptorSet(graphics.descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 0, &graphics.outputIndexBuffer.bufferView)
+    };
+    vkUpdateDescriptorSets(_device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
+#endif
 
 
     // compute
@@ -1058,54 +1056,56 @@ void ScanlineVGRasterizer::prepareCompute()
 
 void ScanlineVGRasterizer::buildCommandBuffers()
 {
-    //VkCommandBufferBeginInfo cmdBufInfo = vk::initializer::commandBufferBeginInfo();
+#ifdef MOCK_DATA
+    VkCommandBufferBeginInfo cmdBufInfo = vk::initializer::commandBufferBeginInfo();
     VkClearValue clearValue = { {{1.0f, 1.0f, 1.0f, 1.0f}} };
 
-    //VkRenderPassBeginInfo renderPassBeginInfo = vk::initializer::renderPassBeginInfo();
+    VkRenderPassBeginInfo renderPassBeginInfo = vk::initializer::renderPassBeginInfo();
     //VkRenderPassBeginInfo& renderPassBeginInfo = graphics.renderPassBeginInfo;
-    graphics.renderPassBeginInfo = vk::initializer::renderPassBeginInfo();
-    graphics.renderPassBeginInfo.renderPass = _renderPass;
-    graphics.renderPassBeginInfo.renderArea.offset.x = 0;
-    graphics.renderPassBeginInfo.renderArea.offset.y = 0;
-    graphics.renderPassBeginInfo.renderArea.extent.width = _width;
-    graphics.renderPassBeginInfo.renderArea.extent.height = _height;
-    graphics.renderPassBeginInfo.clearValueCount = 1;
-    graphics.renderPassBeginInfo.pClearValues = &clearValue;
+    renderPassBeginInfo = vk::initializer::renderPassBeginInfo();
+    renderPassBeginInfo.renderPass = _renderPass;
+    renderPassBeginInfo.renderArea.offset.x = 0;
+    renderPassBeginInfo.renderArea.offset.y = 0;
+    renderPassBeginInfo.renderArea.extent.width = _width;
+    renderPassBeginInfo.renderArea.extent.height = _height;
+    renderPassBeginInfo.clearValueCount = 1;
+    renderPassBeginInfo.pClearValues = &clearValue;
 
     for (int32_t i = 0; i < _drawCmdBuffers.size(); ++i)
     {
         // Set target frame buffer
-        graphics.renderPassBeginInfo.framebuffer = _frameBuffers[i];
+        renderPassBeginInfo.framebuffer = _frameBuffers[i];
 
-        //VK_CHECK_RESULT(vkBeginCommandBuffer(_drawCmdBuffers[i], &cmdBufInfo));
+        VK_CHECK_RESULT(vkBeginCommandBuffer(_drawCmdBuffers[i], &cmdBufInfo));
 
-        //// Acquire storage buffers from compute queue
-        ////addComputeToGraphicsBarriers(drawCmdBuffers[i]);
+        // Acquire storage buffers from compute queue
+        //addComputeToGraphicsBarriers(drawCmdBuffers[i]);
 
-        //// Draw the particle system using the update vertex buffer
+        // Draw the particle system using the update vertex buffer
 
-        //vkCmdBeginRenderPass(_drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBeginRenderPass(_drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        //VkViewport viewport = vk::initializer::viewport((float)_width, (float)_height, 0.0f, 1.0f);
-        //vkCmdSetViewport(_drawCmdBuffers[i], 0, 1, &viewport);
-        //
-        //VkRect2D scissor = vk::initializer::rect2D(_width, _height, 0, 0);
-        //vkCmdSetScissor(_drawCmdBuffers[i], 0, 1, &scissor);
+        VkViewport viewport = vk::initializer::viewport((float)_width, (float)_height, 0.0f, 1.0f);
+        vkCmdSetViewport(_drawCmdBuffers[i], 0, 1, &viewport);
+        
+        VkRect2D scissor = vk::initializer::rect2D(_width, _height, 0, 0);
+        vkCmdSetScissor(_drawCmdBuffers[i], 0, 1, &scissor);
 
-        //// Render path
-        //vkCmdBindPipeline(_drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphics.pipelines.scanline);
-        //vkCmdBindDescriptorSets(_drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphics.pipelineLayout, 0, 1, &graphics.descriptorSet, 0, NULL);
-        //vkCmdDraw(_drawCmdBuffers[i], outputIndex.size() * 2, 1, 0, 0);
+        // Render path
+        vkCmdBindPipeline(_drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphics.pipelines.scanline);
+        vkCmdBindDescriptorSets(_drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphics.pipelineLayout, 0, 1, &graphics.descriptorSet, 0, NULL);
+        vkCmdDraw(_drawCmdBuffers[i], outputIndex.size() * 2, 1, 0, 0);
 
-        ////drawUI(drawCmdBuffers[i]);
+        //drawUI(drawCmdBuffers[i]);
 
-        //vkCmdEndRenderPass(_drawCmdBuffers[i]);
+        vkCmdEndRenderPass(_drawCmdBuffers[i]);
 
-        //// release the storage buffers to the compute queue
-        ////addGraphicsToComputeBarriers(drawCmdBuffers[i]);
+        // release the storage buffers to the compute queue
+        //addGraphicsToComputeBarriers(drawCmdBuffers[i]);
 
-        //VK_CHECK_RESULT(vkEndCommandBuffer(_drawCmdBuffers[i]));
+        VK_CHECK_RESULT(vkEndCommandBuffer(_drawCmdBuffers[i]));
     }
+#endif
 }
 
 void ScanlineVGRasterizer::prepareComputeBuffers()
@@ -1158,6 +1158,16 @@ void ScanlineVGRasterizer::prepareComputeBuffers()
     _c.trans_pos_in.m1 = vec4(0, 1, 0, 0);
     _c.trans_pos_in.m2 = vec4(0, 0, 1, 0);
     _c.trans_pos_in.m3 = vec4(0, 0, 0, 1);
+
+    _c.trans_pos_in.m0 = vec4(13.190648, 0, 0, -1142.983887);
+    _c.trans_pos_in.m1 = vec4(0, 13.190648, 0, -6987.709961);
+    _c.trans_pos_in.m2 = vec4(0, 0, 1, 0);
+    _c.trans_pos_in.m3 = vec4(0, 0, 0, 1);
+
+    //_c.trans_pos_in.m0 = vec4(8.474686, 0, 0, -120);
+    //_c.trans_pos_in.m1 = vec4(0, 8.474686, 0, -7551);
+    //_c.trans_pos_in.m2 = vec4(0, 0, 1, 0);
+    //_c.trans_pos_in.m3 = vec4(0, 0, 0, 1);
 
     //_c.trans_pos_in.m0 = vec4(17.789654, 0, 0, -815.924683);
     //_c.trans_pos_in.m1 = vec4(0, 17.789654, 0, -16161.220703);

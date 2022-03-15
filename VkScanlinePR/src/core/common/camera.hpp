@@ -12,12 +12,9 @@ class Camera {
 public:
 	Camera() {}
 
-	void init(const glm::vec3& pos, bool flip) {
-		_position = pos;
-		_up = glm::vec3(
-			0.0f
-			, flip ? -1.0f : 1.0f
-			, 0.0f);
+	void init(int width, int height) {
+		_scene_width = width;
+		_scene_height = height;
 
 		_mv = glm::mat4(1.0f);
 	}
@@ -47,7 +44,7 @@ public:
 			return;
 		}
 		translate(-_last_pos.x, -_last_pos.y);
-		scale(dy > 0 ? 1.04f : 0.96f);
+		scale(dy > 0 ? 1.1f : 0.9f);
 		translate(_last_pos.x, _last_pos.y);
 	}
 
@@ -57,15 +54,14 @@ public:
 	}
 
 private:
-	glm::vec3 _position;
-	glm::vec3 _up;
+	int _scene_width, _scene_height;
 
 private:
 	bool _right_btn_down = false;
 	bool _key_down = false;
 	glm::vec2 _last_pos = glm::vec2(0.0f);
 
-private:
+public:
 	void keyDown() {
 		_key_down = true;
 	}

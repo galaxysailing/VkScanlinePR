@@ -48,8 +48,15 @@ private:
 	std::shared_ptr<VGRasterizer> _vgRasterizer;
 
 	Camera _camera;
+
 // for user operation
 private:
+	struct {
+		bool right_down = false;
+		bool left_down = false;
+		glm::ivec2 pos;
+	} _mouse_state;
+
 	static void cursorPosCallback(GLFWwindow* window, double xpos, double ypos);	
 	static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 	static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
@@ -84,12 +91,20 @@ void ScanlineVGApplication::cleanupWindow()
 void ScanlineVGApplication::cursorPosCallback(GLFWwindow* window, double xpos, double ypos)
 {
 	auto& app = *((ScanlineVGApplication*)glfwGetWindowUserPointer(window));
-	//printf("window size: %d, %d\n", that->_width, that->_height);
-	
-	printf("mouse pos: %f, %f\n", xpos, ypos);
-	app._camera.move(xpos, ypos);
+	auto& camera = app._camera;
+	auto& mouse_state = app._mouse_state;
+	//printf("window size: %d, %d\n", that->_width, that->_height);	
 
-	glm::mat4 m = glm::transpose(app._camera.mv());
+	if (app._mouse_state.right_down) {
+		float dx = xpos - mouse_state.pos.x, dy = mouse_state.pos.y - ypos;
+		camera.translate(dx, dy);
+	}
+	app._mouse_state.pos = glm::ivec2(xpos, ypos);
+
+	printf("mouse pos: %f, %f\n", xpos, ypos);
+	//app._camera.move(xpos, ypos);
+
+	//glm::mat4 m = glm::transpose(app._camera.mv());
 	//printf("%f %f %f %f\n", m[0][0], m[0][1], m[0][2], m[0][3]);
 	//printf("%f %f %f %f\n", m[1][0], m[1][1], m[1][2], m[1][3]);
 	//printf("%f %f %f %f\n", m[2][0], m[2][1], m[2][2], m[2][3]);
@@ -99,7 +114,18 @@ void ScanlineVGApplication::cursorPosCallback(GLFWwindow* window, double xpos, d
 
 void ScanlineVGApplication::scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
 	auto& app = *((ScanlineVGApplication*)glfwGetWindowUserPointer(window));
-	app._camera.wheel(yoffset);
+	auto& camera = app._camera;
+	auto& mouse_state = app._mouse_state;
+
+	auto cp = mouse_state.pos;
+	cp.y = app._height - cp.y;
+
+	float s = yoffset > 0 ? 1.1f : 0.9f;
+	camera.translate(-cp.x, -cp.y);
+	camera.scale(s);
+	camera.translate(cp.x, cp.y);
+	//app._camera.wheel(yoffset);
+	
 	printf("mouse scroll: %f, %f\n", xoffset, yoffset);
 }
 
@@ -108,8 +134,10 @@ void ScanlineVGApplication::mouseButtonCallback(GLFWwindow* window, int button, 
 	auto& app = *((ScanlineVGApplication*)glfwGetWindowUserPointer(window));
 	if (button == GLFW_MOUSE_BUTTON_RIGHT) {
 		switch (action) {
-			case GLFW_PRESS:app._camera.rightBtnDown(); break;
-			case GLFW_RELEASE:app._camera.rightBtnUp(); break;
+			//case GLFW_PRESS:app._camera.rightBtnDown(); break;
+			//case GLFW_RELEASE:app._camera.rightBtnUp(); break;
+			case GLFW_PRESS: app._mouse_state.right_down = true; break;
+			case GLFW_RELEASE: app._mouse_state.right_down = false; break;
 		}
 	}
 }
@@ -118,7 +146,7 @@ void ScanlineVGApplication::mouseButtonCallback(GLFWwindow* window, int button, 
 void ScanlineVGApplication::run() {
 	if (!_init) {
 		initWindow();
-		_camera.init(glm::vec3(0.0f, 0.0f, 0.0f), false);
+		_camera.init(_width, _height);
 		_vgRasterizer = std::make_shared<ScanlineVGRasterizer>();
 		_vgRasterizer->initialize(_window, _width, _height);
 		_vgRasterizer->loadVG(_vgContainer);

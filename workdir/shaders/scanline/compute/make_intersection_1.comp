@@ -8,8 +8,8 @@ layout (local_size_x = BLOCK_SIZE) in;
 
 #define SHARED_MAP(i) (shared_index + (i) * BLOCK_SIZE)
 #define CUT_POINT_MAP(i) (5 * i)
-#define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
-// #define LERP(a, b, t) ((a) + (t) * ((b) - (a)))
+// #define LERP(a, b, t) ((a) * (1.0f-(t)) + (b) * (t))
+#define LERP(a, b, t) ((a) + (t) * ((b) - (a)))
 #define MAX(a, b) (((a)>(b))?(a):(b))
 #define MIN(a, b) (((a)<(b))?(a):(b))
 #define CLAMP(v, mi, ma) (MIN(ma, MAX(v, mi))) 
@@ -75,6 +75,7 @@ shared struct {
 
 int float2int_rd(float x){
     return x >= 0.0f?int(x):int(x - 1.0f);
+    // return int(floor(x));
 }
 
 float interpolateGeneralCurve(uint curve_type, float t, uint shared_index, uint offset){
@@ -224,13 +225,14 @@ void main(){
 
     uint poidx = curve_pos_map[cidx];
 
-    uint ct_idx = (cidx >> 2);
-    uint ct_offset = (cidx % 4) << 3;
-    // little end: 
-    // offset           0   1   2   3
-    // value            01  02  04  08
-    // result 32-bit:   0x08040201
-    uint c_type = ((curve_type[ct_idx] >> ct_offset) & 0x000000FF);
+    // uint ct_idx = (cidx >> 2);
+    // uint ct_offset = (cidx % 4) << 3;
+    // // little end: 
+    // // offset           0   1   2   3
+    // // value            01  02  04  08
+    // // result 32-bit:   0x08040201
+    // uint c_type = ((curve_type[ct_idx] >> ct_offset) & 0x000000FF);
+    uint c_type = curve_type[cidx];
 
     for(uint i = 0; i < 4; ++i){
         if(i < (c_type & 7)){
@@ -254,7 +256,7 @@ void main(){
 
 	if (is_visible) { 
         _shared.t1_queue[SHARED_MAP(n_cuts)] = 1.f;
-        n_cuts++;
+        ++n_cuts;
     }
 
     // calculate t solve of curve intersection
@@ -378,7 +380,7 @@ void main(){
 					float x0 = _shared.point_coords[SHARED_MAP(side * 4 + 0)];
 					float x1 = _shared.point_coords[SHARED_MAP(side * 4 + 1)];
                     float a = x1 - x0;
-                    a = (a != 0? (1.0f / a) : 0.0f);
+                    a = (a != 0.0f? (1.0f / a) : 0.0f);
 					t_solve = min(max((c - x0) * a, t_min), t1_ms);
 				}
 				else if (c_type == QUADRIC) {
@@ -410,7 +412,7 @@ void main(){
 
 						for (int jiter = 0; jiter < CUBIC_ITERATION_NUMBER; ++jiter) {
 
-							float tm = (t0 + t1) * .5f;
+							float tm = (t0 + t1) * 0.5f;
 							float vtm = interpolateGeneralCurve(c_type, tm, cv0, cv1, cv2, cv3, 0.0f);
 
 							t_solve = tm;
